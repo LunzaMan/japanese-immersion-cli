@@ -1,0 +1,11 @@
+[package]
+name = "japanese-immersion-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde_json = "1.0.150"
+serde = { version = "1.0.228", features = ["derive"] }
+reqwest = "0.13.4"
+tokio = {version = "1.52.3", features = ["macros", "rt-multi-thread"]}
+rusqlite = "0.40.1"
