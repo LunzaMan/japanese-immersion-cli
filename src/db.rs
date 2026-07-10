@@ -1,3 +1,4 @@
+use heck::ToTitleCase;
 use rusqlite::{Connection, Params, Result, Statement, named_params, params, params_from_iter};
 
 use crate::{
@@ -137,7 +138,7 @@ pub fn anime_query_by_name(conn: &Connection, name: String) -> rusqlite::Result<
             ",
     )?;
 
-    let mut result = anime_query(&mut stmt, named_params! {":name": name}).unwrap();
+    let mut result = anime_query(&mut stmt, named_params! {":name": name.to_title_case()}).unwrap();
 
     let anime = result.remove(0);
     Ok(anime)
@@ -193,7 +194,7 @@ pub fn add_card_mutation(
             ",
             named_params! {
                 ":number" : number_of_cards,
-                ":name" : name,
+                ":name" : name.to_title_case(),
             },
         )?,
         (CardsCommand::Total, Some(name)) => conn.execute(
@@ -205,7 +206,7 @@ pub fn add_card_mutation(
             ",
             named_params! {
                 ":number" : number_of_cards,
-                ":name" : name,
+                ":name" : name.to_title_case(),
             },
         )?,
 

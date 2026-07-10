@@ -651,6 +651,7 @@ name = "japanese-immersion-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "heck",
  "r2d2",
  "reqwest",
  "rusqlite",
