@@ -1,0 +1,219 @@
+use rusqlite::{Connection, Params, Result, Statement, named_params, params, params_from_iter};
+
+use crate::{
+    CardsCommand,
+    anime_api_data::{
+        self, Anime, ListType,
+        MediaType::{self},
+    },
+};
+
+pub fn connect(db_path: &str) -> Connection {
+    let conn = Connection::open(db_path).expect("Can't connect to db");
+
+    if !conn.table_exists(None, "anime").unwrap() {
+        conn.execute(
+            "
+                CREATE TABLE IF NOT EXISTS anime(
+                    id INTEGER PRIMARY KEY,
+                    english_name TEXT,
+                    romaji_name TEXT,
+                    native_name TEXT,
+                    date_started TEXT,
+                    date_completed TEXT, 
+                    date_added TEXT,
+                    total_episodes INTEGER, 
+                    episode_progress INTEGER, 
+                    anki_flashcards INTEGER, 
+                    is_current INTEGER,
+                    anilist_url TEXT,
+                    watch_sequence INTEGER,
+                    watch_status TEXT,
+                    media_type TEXT
+
+
+                ), STRICT
+            ",
+            (),
+        )
+        .expect("Table creation failed");
+    }
+
+    println!("Connected to Database");
+    conn
+}
+
+pub fn add_anime(
+    conn: &Connection,
+    api_data: anime_api_data::Anime,
+    watch_status: anime_api_data::WatchStatus,
+    is_current: bool,
+) -> Result<()> {
+    println!("Adding Anime to Database");
+
+    println!("{}", is_current);
+
+    if is_current {
+        conn.execute(
+            "UPDATE anime SET is_current = false WHERE is_current = true",
+            (),
+        )
+        .expect("Couldn't remove is_current from previous anime");
+    }
+
+    // todo: first check if anime already in list by using anilist id
+    conn.execute(
+            "INSERT INTO anime(id, english_name, romaji_name, native_name, date_added, total_episodes, is_current, anilist_url, watch_status, media_type) 
+                 VALUES(?1, ?2, ?3, ?4, current_date, ?5, ?6, ?7, ?8, ?9 )",
+                 (
+                     api_data.get_id(),
+                     api_data.get_english_title(),
+                     api_data.get_romaji_title(),
+                     api_data.get_native_title(),
+                     api_data.get_episode_count(),
+                     is_current,
+                     api_data.get_url(),
+                     watch_status.to_string(),
+                     api_data.get_media_type()
+                     ),
+        ).expect("Failed to add anime");
+
+    if is_current {
+        let id: u32 = api_data.get_id();
+        conn.execute(
+            "UPDATE anime SET date_started = current_date WHERE id=?1",
+            params![id],
+        )
+        .expect("Couldn't add date started");
+    }
+
+    println!("Anime added to database");
+
+    Ok(())
+}
+
+pub fn query_current(conn: &Connection) -> rusqlite::Result<Anime> {
+    let mut stmt = conn.prepare("select * from anime where is_current=1")?;
+
+    let mut result = anime_query(&mut stmt, []).unwrap();
+
+    let anime = result.remove(0);
+    Ok(anime)
+}
+
+pub fn query_list(
+    conn: &Connection,
+    list_type: ListType,
+    media_type: MediaType,
+) -> rusqlite::Result<Vec<anime_api_data::Anime>> {
+    let mut stmt;
+    let mut parameters = Vec::new();
+    match media_type {
+        MediaType::Anime => match list_type {
+            ListType::All => {
+                stmt = conn.prepare("SELECT * FROM anime")?;
+            }
+            _ => {
+                stmt = conn.prepare("SELECT * FROM anime WHERE watch_status = :list_type")?;
+                parameters.push(list_type.to_string().trim().to_owned());
+            }
+        },
+        _ => {
+            stmt = conn.prepare("SELECT * FROM anime")?;
+        }
+    }
+
+    let result = anime_query(&mut stmt, params_from_iter(parameters)).unwrap();
+    Ok(result)
+}
+
+pub fn anime_query_by_name(conn: &Connection, name: String) -> rusqlite::Result<Anime> {
+    let mut stmt = conn.prepare(
+        "
+    select * from anime
+        where english_name = :name
+        OR romaji_name = :name
+        OR native_name = :name
+            ",
+    )?;
+
+    let mut result = anime_query(&mut stmt, named_params! {":name": name}).unwrap();
+
+    let anime = result.remove(0);
+    Ok(anime)
+}
+
+fn anime_query<P: Params>(
+    stmt: &mut Statement<'_>,
+    params: P,
+) -> rusqlite::Result<Vec<anime_api_data::Anime>> {
+    let result: Vec<anime_api_data::Anime> = stmt
+        .query_map(params, |row| {
+            Ok(anime_api_data::Anime {
+                id: row.get(0)?,
+                title: anime_api_data::Title {
+                    english: row.get(1)?,
+                    romaji: row.get(2)?,
+                    native: row.get(3)?,
+                },
+                date_started: row.get(4)?,
+                date_completed: row.get(5)?,
+                episodes: row.get(6)?,
+                episode_progress: row.get(7)?,
+                anki_flashcards: row.get(8)?,
+                is_current: row.get(9)?,
+                url: row.get(10)?,
+                watch_sequence: row.get(11)?,
+                watch_status: row.get(12)?,
+                media_type: row.get(13)?,
+                date_added: row.get(14)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(result)
+}
+
+pub fn add_card_mutation(
+    conn: &Connection,
+    add_type: &CardsCommand,
+    number_of_cards: &u32,
+    name: &Option<String>,
+) -> Result<()> {
+    match (add_type, name) {
+        (CardsCommand::Add, None) => conn.execute(
+            "UPDATE anime SET anki_flashcards=COALESCE(anki_flashcards,0) + ?1 WHERE is_current=1",
+            [number_of_cards],
+        )?,
+        (CardsCommand::Add, Some(name)) => conn.execute(
+            "UPDATE anime 
+            SET anki_flashcards= COALESCE(anki_flashcards,0) + :number
+            WHERE english_name = :name
+            OR romaji_name = :name
+            OR native_name = :name
+            ",
+            named_params! {
+                ":number" : number_of_cards,
+                ":name" : name,
+            },
+        )?,
+        (CardsCommand::Total, Some(name)) => conn.execute(
+            "UPDATE anime 
+            SET anki_flashcards= :number
+            WHERE english_name = :name
+            OR romaji_name = :name
+            OR native_name = :name
+            ",
+            named_params! {
+                ":number" : number_of_cards,
+                ":name" : name,
+            },
+        )?,
+
+        (CardsCommand::Total, None) => conn.execute(
+            "UPDATE anime SET anki_flashcards=?1 WHERE is_current=1",
+            [number_of_cards],
+        )?,
+    };
+
+    Ok(())
+}

@@ -1,65 +1,82 @@
-use serde::{Deserialize, Serialize};
-use serde_json::from_str;
-use std::io;
+use clap::{Parser, Subcommand, ValueEnum};
+
+use crate::anime_api_data::ListType;
 
 mod anilist_api;
+mod anime_api_data;
+mod db;
+mod operations;
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Anime {
-    id: usize,
-    episodes: u8,
-    title: Title,
-    #[serde(rename = "type")]
-    media_type: String,
-    #[serde(rename = "siteUrl")]
-    url: String,
+#[derive(Parser)]
+#[command(version)]
+struct Args {
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
+    #[command(subcommand)]
+    command: Commands,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Title {
-    english: String,
-    native: String,
-    romaji: String,
+#[derive(Subcommand)]
+enum Commands {
+    Add {
+        name: Option<String>,
+    },
+    List {
+        status: Option<anime_api_data::ListType>,
+    },
+    Current,
+    Episode,
+    Cards {
+        card_command: CardsCommand,
+        number: u32,
+
+        #[arg(long)]
+        name: Option<String>,
+    },
 }
 
-async fn search() {
-    let mut search_value = String::new();
-
-    // todo: make the input in the same line
-    println!("Anime Name:");
-    io::stdin()
-        .read_line(&mut search_value)
-        .expect("Failed to read line");
-
-    // todo: expriment: try to send ony the result array from use_api
-    let result = anilist_api::browse(search_value.to_string()).await;
-    let result_arr = &result["data"]["Page"]["media"].as_array().unwrap();
-
-    for i in 0..result_arr.len() {
-        println!("{}. {}", i + 1, result_arr[i]["title"]["romaji"]);
-    }
-
-    // todo: add a quit function
-
-    let mut choice = String::new();
-
-    io::stdin()
-        .read_line(&mut choice)
-        .expect("Failed to read line");
-
-    let x: usize = choice.trim().parse().expect("Input is not a number");
-
-    let id = &result_arr[x - 1]["id"].as_number().unwrap();
-    let anime_json = anilist_api::get_by_id(id).await["data"]["Media"].to_string();
-
-    let anime = from_str::<Anime>(&anime_json).expect("Could create object");
-
-    println!("{:#} {:}", anime.id, anime.title.english);
-
-    // Todo: next step = add the data struct to sqlite
+#[derive(ValueEnum, Clone)]
+enum CardsCommand {
+    Add,
+    Total,
 }
 
 #[tokio::main]
 async fn main() {
-    search().await;
+    let conn = db::connect("list.db3");
+    let args = Args::parse();
+
+    match &args.command {
+        Commands::Add { name } => match name {
+            Some(name) => {
+                operations::add(&conn, Some(name.to_owned())).await;
+            }
+            None => {
+                operations::add(&conn, None).await;
+            }
+        },
+
+        Commands::List { status } => match status {
+            Some(status) => {
+                operations::list(&conn, status.to_owned());
+            }
+            None => {
+                operations::list(&conn, ListType::All);
+            }
+        },
+        Commands::Current => {
+            operations::get_current(&conn);
+        }
+        Commands::Episode => {
+            operations::get_episode(&conn);
+        }
+        Commands::Cards {
+            card_command,
+            number,
+            name,
+        } => {
+            operations::add_card(&conn, card_command, number, name);
+        }
+    }
 }
