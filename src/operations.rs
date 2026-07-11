@@ -1,9 +1,10 @@
 use std::io::{self, Write};
 
+use anyhow::{Ok, bail};
 use rusqlite::Connection;
 use serde_json::from_str;
 
-use crate::{CardsCommand, anilist_api, anime_api_data, db};
+use crate::{CardsCommand, EpisodeMutation, anilist_api, anime_api_data, db};
 
 pub async fn add(conn: &Connection, search_arg: Option<String>) {
     let mut input_text = String::new();
@@ -132,11 +133,6 @@ pub fn list(conn: &Connection, list_type: anime_api_data::ListType) {
 pub fn get_current(conn: &Connection) {
     let anime = db::query_current(conn).unwrap();
 
-    println!("{}. {} ({})", anime.id, anime.title.english, anime.url);
-}
-
-pub fn get_episode(conn: &Connection) {
-    let anime = db::query_current(conn).unwrap();
     let current_episode: u16;
 
     let x = anime.episode_progress;
@@ -146,10 +142,9 @@ pub fn get_episode(conn: &Connection) {
             current_episode = 0;
         }
     }
-
     println!(
-        "{}. {} {}/{}",
-        anime.id, anime.title.english, current_episode, anime.episodes
+        "{}. {} {}/{} ({})",
+        anime.id, anime.title.english, current_episode, anime.episodes, anime.url
     );
 }
 
@@ -174,4 +169,57 @@ pub fn add_card(
         None => updated_number = 0,
     }
     println!("{} {} {}", anime.id, anime.title.english, updated_number);
+}
+
+fn get_anime_from_option(conn: &Connection, name: &Option<String>) -> anime_api_data::Anime {
+    let anime = match name {
+        Some(name) => db::anime_query_by_name(conn, name.to_owned()).unwrap(),
+        None => db::query_current(conn).unwrap(),
+    };
+
+    anime
+}
+
+pub fn update_episode_count(
+    conn: &Connection,
+    mut_type: &EpisodeMutation,
+    name: &Option<String>,
+    number: Option<u16>,
+) -> Result<(), anyhow::Error> {
+    let anime = get_anime_from_option(conn, name);
+
+    match mut_type {
+        EpisodeMutation::Set { number } => {
+            if number > &anime.episodes {
+                bail!("Error: Invalid episode count");
+            }
+        }
+        _ => {}
+    };
+
+    let _ = db::episode_mutation(conn, mut_type, name, number);
+
+    let anime = get_anime_from_option(conn, name);
+
+    if anime.episodes == anime.episode_progress.unwrap() {
+        //todo: set completed
+        println!("Set completed");
+    }
+
+    Ok(())
+}
+
+pub fn set_current(conn: &Connection, name: &String) {
+    let _ = db::update_current(conn, name).unwrap();
+
+    let anime = get_anime_from_option(conn, &None);
+
+    println!("Current anime:");
+    println!(
+        "{}. {} {}/{}",
+        anime.id,
+        anime.title.english,
+        anime.episode_progress.unwrap(),
+        anime.episodes
+    );
 }

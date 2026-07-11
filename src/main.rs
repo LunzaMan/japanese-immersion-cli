@@ -26,7 +26,6 @@ enum Commands {
         status: Option<anime_api_data::ListType>,
     },
     Current,
-    Episode,
     Cards {
         card_command: CardsCommand,
         number: u32,
@@ -34,6 +33,22 @@ enum Commands {
         #[arg(long)]
         name: Option<String>,
     },
+    Episode {
+        #[command(subcommand)]
+        episode_mutation_type: EpisodeMutation,
+        #[arg(long, global = true)]
+        name: Option<String>,
+    },
+    SetCurrent {
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum EpisodeMutation {
+    Add,
+    Subtract,
+    Set { number: u16 },
 }
 
 #[derive(ValueEnum, Clone)]
@@ -65,12 +80,11 @@ async fn main() {
                 operations::list(&conn, ListType::All);
             }
         },
+
         Commands::Current => {
             operations::get_current(&conn);
         }
-        Commands::Episode => {
-            operations::get_episode(&conn);
-        }
+
         Commands::Cards {
             card_command,
             number,
@@ -78,5 +92,37 @@ async fn main() {
         } => {
             operations::add_card(&conn, card_command, number, name);
         }
+
+        Commands::Episode {
+            episode_mutation_type,
+            name,
+        } => {
+            let err;
+            match episode_mutation_type {
+                EpisodeMutation::Set { number } => {
+                    err = operations::update_episode_count(
+                        &conn,
+                        episode_mutation_type,
+                        name,
+                        Some(number.to_owned()),
+                    );
+                }
+                _ => {
+                    err =
+                        operations::update_episode_count(&conn, episode_mutation_type, name, None);
+                }
+            }
+
+            if let Err(err) = err {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        }
+
+        Commands::SetCurrent { name } => {
+            operations::set_current(&conn, name);
+        }
     }
+
+    println!("Main gets again");
 }

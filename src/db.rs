@@ -2,10 +2,11 @@ use heck::ToTitleCase;
 use rusqlite::{Connection, Params, Result, Statement, named_params, params, params_from_iter};
 
 use crate::{
-    CardsCommand,
+    CardsCommand, EpisodeMutation,
     anime_api_data::{
         self, Anime, ListType,
         MediaType::{self},
+        WatchStatus,
     },
 };
 
@@ -215,6 +216,74 @@ pub fn add_card_mutation(
             [number_of_cards],
         )?,
     };
+
+    Ok(())
+}
+
+pub fn episode_mutation(
+    conn: &Connection,
+    episode_mutation_type: &EpisodeMutation,
+    name: &Option<String>,
+    number: Option<u16>,
+) -> Result<()> {
+    let base = "UPDATE anime";
+    let where_clause = match name {
+        Some(name) => {
+            let name_ = name.to_title_case();
+            format!(
+                "WHERE english_name = '{name_}'
+            OR romaji_name = '{name_}'
+            OR native_name = '{name_}'
+           ; "
+            )
+        }
+        None => format!("WHERE is_current=1;"),
+    };
+
+    let set_clause: String;
+
+    match (episode_mutation_type, number) {
+        (_, Some(number)) => {
+            set_clause = format!("SET episode_progress = {number}");
+        }
+        (EpisodeMutation::Add, _) => {
+            set_clause = format!("SET episode_progress = COALESCE(episode_progress,0) + 1");
+        }
+        (EpisodeMutation::Subtract, _) => {
+            set_clause = format!("SET episode_progress = COALESCE(episode_progress,0) - 1");
+        }
+        (_, _) => {
+            set_clause = format!("");
+        }
+    };
+
+    let sql = format!("{base}\n{set_clause}\n{where_clause}");
+
+    println!("{}", sql);
+    conn.execute(&sql, [])?;
+
+    Ok(())
+}
+
+pub fn update_current(conn: &Connection, name: &str) -> rusqlite::Result<()> {
+    //todo: if anime was planning then set date to today
+    let name_ = name.to_title_case();
+    let watching_status = WatchStatus::Watching.to_string();
+    let remove_current_sql = "UPDATE anime SET is_current = 0 WHERE is_current = 1;";
+    let set_current_sql = format!(
+        "UPDATE anime SET is_current = 1,
+        watch_status = '{watching_status}'
+        WHERE 
+                 english_name = '{name_}'
+            OR romaji_name = '{name_}'
+            OR native_name = '{name_}'
+           ; "
+    );
+
+    println!("{}", set_current_sql);
+
+    conn.execute(remove_current_sql, [])?;
+    conn.execute(&set_current_sql, [])?;
 
     Ok(())
 }
