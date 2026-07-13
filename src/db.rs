@@ -1,3 +1,5 @@
+use std::result;
+
 use heck::ToTitleCase;
 use rusqlite::{Connection, Params, Result, Statement, named_params, params, params_from_iter};
 
@@ -39,6 +41,12 @@ pub fn connect(db_path: &str) -> Connection {
             (),
         )
         .expect("Table creation failed");
+
+        conn.execute(
+            "CREATE UNIQUE INDEX one_current ON anime(is_current) WHERE is_current=1",
+            [],
+        )
+        .expect("Failed creating unique index");
     }
 
     println!("Connected to Database");
@@ -103,6 +111,14 @@ pub fn query_current(conn: &Connection) -> rusqlite::Result<Anime> {
     Ok(anime)
 }
 
+pub fn current_exists(conn: &Connection) -> rusqlite::Result<bool> {
+    let sql = "select exists( select 1 from anime where is_current=1)";
+
+    let result: bool = conn.query_row(sql, [], |row| row.get(0))?;
+
+    Ok(result)
+}
+
 pub fn query_list(
     conn: &Connection,
     list_type: ListType,
@@ -129,20 +145,44 @@ pub fn query_list(
     Ok(result)
 }
 
-pub fn anime_query_by_name(conn: &Connection, name: String) -> rusqlite::Result<Anime> {
-    let mut stmt = conn.prepare(
+pub fn anime_query_by_name(conn: &Connection, name: &str) -> rusqlite::Result<Anime> {
+    println!("{}", name);
+
+    let sql = format!(
         "
-    select * from anime
-        where english_name = :name
-        OR romaji_name = :name
-        OR native_name = :name
-            ",
-    )?;
+        select * from anime
+        where english_name = '{name}' COLLATE NOCASE
+        OR romaji_name = '{name}' COLLATE NOCASE
+        OR native_name = '{name}' COLLATE NOCASE;
+        "
+    );
+    println!("{}", sql);
 
-    let mut result = anime_query(&mut stmt, named_params! {":name": name.to_title_case()}).unwrap();
+    let mut stmt = conn.prepare(&sql)?;
+    // let mut stmt = conn.prepare(
+    //     " select * from anime
+    //     where english_name = :name
+    //     OR romaji_name = :name
+    //     OR native_name = :name
+    //         ;",
+    // )?;
+    //
+    // let result = anime_query(&mut stmt, named_params! {":name": name.to_title_case()}).unwrap();
+    let result = anime_query(&mut stmt, []).unwrap();
+    let anime = result.into_iter().next().unwrap();
 
-    let anime = result.remove(0);
     Ok(anime)
+}
+
+pub fn anime_by_name_exists(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
+    let sql = "
+        SELECT EXISTS( SELECT 1 FROM anime WHERE 
+        where english_name = :name COLLATE NOCASE
+        OR romaji_name = :name COLLATE NOCASE
+        OR native_name = :name COLLATE NOCASE;
+    ";
+
+    conn.query_row(sql, [], |row| row.get(0))
 }
 
 fn anime_query<P: Params>(
@@ -179,7 +219,7 @@ pub fn add_card_mutation(
     conn: &Connection,
     add_type: &CardsCommand,
     number_of_cards: &u32,
-    name: &Option<String>,
+    name: &Option<&str>,
 ) -> Result<()> {
     match (add_type, name) {
         (CardsCommand::Add, None) => conn.execute(
@@ -189,9 +229,9 @@ pub fn add_card_mutation(
         (CardsCommand::Add, Some(name)) => conn.execute(
             "UPDATE anime 
             SET anki_flashcards= COALESCE(anki_flashcards,0) + :number
-            WHERE english_name = :name
-            OR romaji_name = :name
-            OR native_name = :name
+            where english_name = :name COLLATE NOCASE
+            OR romaji_name = :name COLLATE NOCASE
+            OR native_name = :name COLLATE NOCASE;
             ",
             named_params! {
                 ":number" : number_of_cards,
@@ -201,9 +241,9 @@ pub fn add_card_mutation(
         (CardsCommand::Total, Some(name)) => conn.execute(
             "UPDATE anime 
             SET anki_flashcards= :number
-            WHERE english_name = :name
-            OR romaji_name = :name
-            OR native_name = :name
+            where english_name = :name COLLATE NOCASE
+            OR romaji_name = :name COLLATE NOCASE
+            OR native_name = :name COLLATE NOCASE;
             ",
             named_params! {
                 ":number" : number_of_cards,
@@ -223,7 +263,7 @@ pub fn add_card_mutation(
 pub fn episode_mutation(
     conn: &Connection,
     episode_mutation_type: &EpisodeMutation,
-    name: &Option<String>,
+    name: &Option<&str>,
     number: Option<u16>,
 ) -> Result<()> {
     let base = "UPDATE anime";
@@ -231,9 +271,9 @@ pub fn episode_mutation(
         Some(name) => {
             let name_ = name.to_title_case();
             format!(
-                "WHERE english_name = '{name_}'
-            OR romaji_name = '{name_}'
-            OR native_name = '{name_}'
+                "WHERE english_name = '{name_} COLLATE NOCASE'
+            OR romaji_name = '{name_} COLLATE NOCASE'
+            OR native_name = '{name_} COLLATE NOCASE'
            ; "
             )
         }
@@ -265,25 +305,43 @@ pub fn episode_mutation(
     Ok(())
 }
 
-pub fn update_current(conn: &Connection, name: &str) -> rusqlite::Result<()> {
-    //todo: if anime was planning then set date to today
-    let name_ = name.to_title_case();
-    let watching_status = WatchStatus::Watching.to_string();
+pub fn remove_current(conn: &Connection) -> rusqlite::Result<()> {
     let remove_current_sql = "UPDATE anime SET is_current = 0 WHERE is_current = 1;";
+    conn.execute(remove_current_sql, [])?;
+    Ok(())
+}
+
+pub fn set_current(conn: &Connection, name: &str) -> rusqlite::Result<()> {
+    //todo: if anime was planning then set date to today
+    let watching_status = WatchStatus::Watching.to_string();
     let set_current_sql = format!(
-        "UPDATE anime SET is_current = 1,
+        "
+        UPDATE anime SET is_current = 1,
         watch_status = '{watching_status}'
-        WHERE 
-                 english_name = '{name_}'
-            OR romaji_name = '{name_}'
-            OR native_name = '{name_}'
-           ; "
+        WHERE english_name = '{name}' COLLATE NOCASE
+        OR romaji_name = '{name}' COLLATE NOCASE 
+        OR native_name = '{name}' COLLATE NOCASE;
+        "
     );
 
     println!("{}", set_current_sql);
 
-    conn.execute(remove_current_sql, [])?;
     conn.execute(&set_current_sql, [])?;
+
+    Ok(())
+}
+
+pub fn start_date_mutation(conn: &Connection, name: &str) -> rusqlite::Result<()> {
+    println!("start mut");
+    let name_ = name.to_title_case();
+
+    let sql = "UPDATE anime SET date_started = current_date WHERE
+                 english_name = :name COLLATE NOCASE
+            OR romaji_name = :name COLLATE NOCASE
+            OR native_name = :name COLLATE NOCASE
+           ; ";
+
+    conn.execute(sql, named_params! {":name": name_})?;
 
     Ok(())
 }

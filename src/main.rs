@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use heck::ToTitleCase;
 
 use crate::anime_api_data::ListType;
 
@@ -90,7 +91,7 @@ async fn main() {
             number,
             name,
         } => {
-            operations::add_card(&conn, card_command, number, name);
+            operations::add_card(&conn, card_command, number, &name.as_deref());
         }
 
         Commands::Episode {
@@ -103,13 +104,17 @@ async fn main() {
                     err = operations::update_episode_count(
                         &conn,
                         episode_mutation_type,
-                        name,
+                        &name.as_deref(),
                         Some(number.to_owned()),
                     );
                 }
                 _ => {
-                    err =
-                        operations::update_episode_count(&conn, episode_mutation_type, name, None);
+                    err = operations::update_episode_count(
+                        &conn,
+                        episode_mutation_type,
+                        &name.as_deref(),
+                        None,
+                    );
                 }
             }
 
@@ -120,7 +125,8 @@ async fn main() {
         }
 
         Commands::SetCurrent { name } => {
-            operations::set_current(&conn, name);
+            let name = name.to_title_case();
+            operations::set_current(&conn, name.as_str());
         }
     }
 

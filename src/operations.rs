@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 
 use anyhow::{Ok, bail};
+use heck::ToTitleCase;
 use rusqlite::Connection;
 use serde_json::from_str;
 
@@ -131,36 +132,41 @@ pub fn list(conn: &Connection, list_type: anime_api_data::ListType) {
 }
 
 pub fn get_current(conn: &Connection) {
-    let anime = db::query_current(conn).unwrap();
+    if db::current_exists(conn).unwrap() {
+        let anime = db::query_current(conn).unwrap();
 
-    let current_episode: u16;
+        let current_episode: u16;
 
-    let x = anime.episode_progress;
-    match x {
-        Some(x) => current_episode = x,
-        None => {
-            current_episode = 0;
+        let x = anime.episode_progress;
+        match x {
+            Some(x) => current_episode = x,
+            None => {
+                current_episode = 0;
+            }
         }
+        println!(
+            "{}. {} {}/{} ({})",
+            anime.id, anime.title.english, current_episode, anime.episodes, anime.url
+        );
+    } else {
+        no_current_error();
     }
-    println!(
-        "{}. {} {}/{} ({})",
-        anime.id, anime.title.english, current_episode, anime.episodes, anime.url
-    );
+}
+
+fn no_current_error() -> ! {
+    eprint!("No anime is set as current. Set one anime as current before using");
+    std::process::exit(1);
 }
 
 pub fn add_card(
     conn: &Connection,
     add_type: &CardsCommand,
     number_of_cards: &u32,
-    name: &Option<String>,
+    name: &Option<&str>,
 ) {
     let _ = db::add_card_mutation(conn, add_type, number_of_cards, name);
 
-    let anime;
-    match name {
-        Some(name) => anime = db::anime_query_by_name(conn, name.to_owned()).unwrap(),
-        None => anime = db::query_current(conn).unwrap(),
-    };
+    let anime = get_anime_from_option(conn, name);
 
     let db_number = anime.anki_flashcards;
     let updated_number;
@@ -171,10 +177,16 @@ pub fn add_card(
     println!("{} {} {}", anime.id, anime.title.english, updated_number);
 }
 
-fn get_anime_from_option(conn: &Connection, name: &Option<String>) -> anime_api_data::Anime {
+fn get_anime_from_option(conn: &Connection, name: &Option<&str>) -> anime_api_data::Anime {
     let anime = match name {
-        Some(name) => db::anime_query_by_name(conn, name.to_owned()).unwrap(),
-        None => db::query_current(conn).unwrap(),
+        Some(name) => db::anime_query_by_name(conn, name).unwrap(),
+        None => {
+            if db::current_exists(conn).unwrap() {
+                db::query_current(conn).unwrap()
+            } else {
+                no_current_error();
+            }
+        }
     };
 
     anime
@@ -183,7 +195,7 @@ fn get_anime_from_option(conn: &Connection, name: &Option<String>) -> anime_api_
 pub fn update_episode_count(
     conn: &Connection,
     mut_type: &EpisodeMutation,
-    name: &Option<String>,
+    name: &Option<&str>,
     number: Option<u16>,
 ) -> Result<(), anyhow::Error> {
     let anime = get_anime_from_option(conn, name);
@@ -209,8 +221,38 @@ pub fn update_episode_count(
     Ok(())
 }
 
-pub fn set_current(conn: &Connection, name: &String) {
-    let _ = db::update_current(conn, name).unwrap();
+pub fn set_current(conn: &Connection, name: &str) {
+    let is_prev_current = db::current_exists(conn).unwrap();
+
+    let anime_name = name.to_title_case();
+    let selected_anime = get_anime_from_option(conn, &Some(&anime_name.as_str()));
+
+    let is_planning = match selected_anime.watch_status.unwrap() {
+        anime_api_data::WatchStatus::Planning => true,
+        _ => false,
+    };
+
+    if is_prev_current {
+        let prev_current_anime = db::query_current(conn).unwrap();
+
+        if prev_current_anime.id == selected_anime.id {
+            println!("{} was already current anime", selected_anime.title.english);
+
+            if is_planning {
+                let _ = db::start_date_mutation(conn, name);
+            }
+
+            return;
+        }
+
+        let _ = db::remove_current(conn).unwrap();
+    }
+
+    let _ = db::set_current(conn, name).unwrap();
+
+    if is_planning {
+        let _ = db::start_date_mutation(conn, name);
+    }
 
     let anime = get_anime_from_option(conn, &None);
 
