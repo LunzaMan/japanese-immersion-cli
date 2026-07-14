@@ -4,7 +4,7 @@ use core::fmt;
 use rusqlite::types::FromSql;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, ValueEnum, Clone)]
 pub enum WatchStatus {
     Watching,
     Completed,

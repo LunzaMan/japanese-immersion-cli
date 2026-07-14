@@ -1,15 +1,15 @@
-use std::result;
-
+use chrono::NaiveDate;
 use heck::ToTitleCase;
 use rusqlite::{Connection, Params, Result, Statement, named_params, params, params_from_iter};
 
 use crate::{
-    CardsCommand, EpisodeMutation,
+    CardsCommand, DateType, EpisodeMutation,
     anime_api_data::{
         self, Anime, ListType,
         MediaType::{self},
         WatchStatus,
     },
+    error_ctrl::{InvalidArgError, invalid_arg_error},
 };
 
 pub fn connect(db_path: &str) -> Connection {
@@ -156,18 +156,8 @@ pub fn anime_query_by_name(conn: &Connection, name: &str) -> rusqlite::Result<An
         OR native_name = '{name}' COLLATE NOCASE;
         "
     );
-    println!("{}", sql);
 
     let mut stmt = conn.prepare(&sql)?;
-    // let mut stmt = conn.prepare(
-    //     " select * from anime
-    //     where english_name = :name
-    //     OR romaji_name = :name
-    //     OR native_name = :name
-    //         ;",
-    // )?;
-    //
-    // let result = anime_query(&mut stmt, named_params! {":name": name.to_title_case()}).unwrap();
     let result = anime_query(&mut stmt, []).unwrap();
     let anime = result.into_iter().next().unwrap();
 
@@ -176,13 +166,15 @@ pub fn anime_query_by_name(conn: &Connection, name: &str) -> rusqlite::Result<An
 
 pub fn anime_by_name_exists(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
     let sql = "
-        SELECT EXISTS( SELECT 1 FROM anime WHERE 
-        where english_name = :name COLLATE NOCASE
+        SELECT EXISTS( SELECT 1 FROM anime 
+        WHERE english_name = :name COLLATE NOCASE
         OR romaji_name = :name COLLATE NOCASE
-        OR native_name = :name COLLATE NOCASE;
+        OR native_name = :name COLLATE NOCASE);
     ";
 
-    conn.query_row(sql, [], |row| row.get(0))
+    let result: bool = conn.query_row(&sql, named_params! {":name": name}, |row| row.get(0))?;
+
+    Ok(result)
 }
 
 fn anime_query<P: Params>(
@@ -271,9 +263,9 @@ pub fn episode_mutation(
         Some(name) => {
             let name_ = name.to_title_case();
             format!(
-                "WHERE english_name = '{name_} COLLATE NOCASE'
-            OR romaji_name = '{name_} COLLATE NOCASE'
-            OR native_name = '{name_} COLLATE NOCASE'
+                "WHERE english_name = '{name_}' COLLATE NOCASE
+            OR romaji_name = '{name_}' COLLATE NOCASE
+            OR native_name = '{name_}' COLLATE NOCASE
            ; "
             )
         }
@@ -312,7 +304,6 @@ pub fn remove_current(conn: &Connection) -> rusqlite::Result<()> {
 }
 
 pub fn set_current(conn: &Connection, name: &str) -> rusqlite::Result<()> {
-    //todo: if anime was planning then set date to today
     let watching_status = WatchStatus::Watching.to_string();
     let set_current_sql = format!(
         "
@@ -324,24 +315,88 @@ pub fn set_current(conn: &Connection, name: &str) -> rusqlite::Result<()> {
         "
     );
 
-    println!("{}", set_current_sql);
-
     conn.execute(&set_current_sql, [])?;
 
     Ok(())
 }
 
-pub fn start_date_mutation(conn: &Connection, name: &str) -> rusqlite::Result<()> {
-    println!("start mut");
-    let name_ = name.to_title_case();
+fn is_valid_date(date: &str) -> bool {
+    let is_valid = NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok();
 
-    let sql = "UPDATE anime SET date_started = current_date WHERE
-                 english_name = :name COLLATE NOCASE
-            OR romaji_name = :name COLLATE NOCASE
-            OR native_name = :name COLLATE NOCASE
-           ; ";
+    is_valid
+}
 
-    conn.execute(sql, named_params! {":name": name_})?;
+pub fn date_mutation(
+    conn: &Connection,
+    name: &str,
+    date: Option<&str>,
+    date_type: DateType,
+) -> rusqlite::Result<()> {
+    let sql_head = "UPDATE anime";
+    let where_clause = "
+            WHERE english_name = ?1 COLLATE NOCASE
+            OR romaji_name = ?1 COLLATE NOCASE
+            OR native_name = ?1 COLLATE NOCASE;
+        ";
+    let mut params = Vec::new();
+    params.push(name);
+    let set_clause: &str;
 
+    match (date_type, date) {
+        (DateType::Start, Some(date)) => {
+            let is_valid_date = is_valid_date(date);
+            if is_valid_date {
+                params.push(date);
+                set_clause = "SET date_started = ?2";
+            } else {
+                invalid_arg_error(InvalidArgError::Date);
+            }
+        }
+        (DateType::Start, None) => {
+            set_clause = "SET date_started = current_date";
+        }
+        (DateType::End, Some(date)) => {
+            let is_valid_date = is_valid_date(date);
+            if is_valid_date {
+                params.push(date);
+                set_clause = "SET date_completed = ?2"
+            } else {
+                invalid_arg_error(InvalidArgError::Date);
+            }
+        }
+        (DateType::End, None) => set_clause = "SET date_completed = current_date",
+    };
+
+    let sql = format!("{sql_head}\n{set_clause}\n{where_clause}");
+
+    conn.execute(&sql, params_from_iter(params))?;
+
+    Ok(())
+}
+
+pub fn watch_status_mutation(
+    conn: &Connection,
+    watch_status: &anime_api_data::WatchStatus,
+    name: Option<&str>,
+) -> rusqlite::Result<()> {
+    let sql_header = "UPDATE anime SET watch_status = ?1";
+
+    let sql_footer;
+    let mut params = Vec::new();
+    params.push(watch_status.to_string());
+    match name {
+        Some(name) => {
+            params.push(name.to_string());
+            sql_footer = "
+            WHERE english_name = ?2 COLLATE NOCASE
+            OR romaji_name = ?2 COLLATE NOCASE
+            OR native_name = ?2 COLLATE NOCASE;
+                ";
+        }
+        None => sql_footer = "WHERE is_current = 1",
+    };
+
+    let sql = format!("{sql_header}\n{sql_footer}");
+    conn.execute(&sql, params_from_iter(params))?;
     Ok(())
 }

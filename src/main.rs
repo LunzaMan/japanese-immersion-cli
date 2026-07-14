@@ -1,12 +1,18 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use heck::ToTitleCase;
+use rusqlite::Connection;
 
-use crate::anime_api_data::ListType;
-
+use crate::{
+    anime_api_data::ListType,
+    error_ctrl::{InvalidArgError, invalid_arg_error},
+    operations::set_completed,
+};
 mod anilist_api;
 mod anime_api_data;
 mod db;
+mod error_ctrl;
 mod operations;
+mod utils;
 
 #[derive(Parser)]
 #[command(version)]
@@ -43,6 +49,20 @@ enum Commands {
     SetCurrent {
         name: String,
     },
+    SetDate {
+        date_type: DateType,
+        date: String,
+        name: String,
+    },
+    SetStatus {
+        watch_status: anime_api_data::WatchStatus,
+        name: Option<String>,
+    },
+    Complete {
+        name: Option<String>,
+        #[arg(long)]
+        date: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -56,6 +76,12 @@ enum EpisodeMutation {
 enum CardsCommand {
     Add,
     Total,
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum DateType {
+    Start,
+    End,
 }
 
 #[tokio::main]
@@ -91,6 +117,7 @@ async fn main() {
             number,
             name,
         } => {
+            let _ = verify_name_exists(&conn, name.as_deref());
             operations::add_card(&conn, card_command, number, &name.as_deref());
         }
 
@@ -98,10 +125,10 @@ async fn main() {
             episode_mutation_type,
             name,
         } => {
-            let err;
+            let _ = verify_name_exists(&conn, name.as_deref());
             match episode_mutation_type {
                 EpisodeMutation::Set { number } => {
-                    err = operations::update_episode_count(
+                    operations::update_episode_count(
                         &conn,
                         episode_mutation_type,
                         &name.as_deref(),
@@ -109,7 +136,7 @@ async fn main() {
                     );
                 }
                 _ => {
-                    err = operations::update_episode_count(
+                    operations::update_episode_count(
                         &conn,
                         episode_mutation_type,
                         &name.as_deref(),
@@ -117,18 +144,42 @@ async fn main() {
                     );
                 }
             }
-
-            if let Err(err) = err {
-                eprintln!("{err}");
-                std::process::exit(1);
-            }
+        }
+        Commands::SetCurrent { name } => {
+            let _ = verify_name_exists(&conn, Some(name));
+            operations::set_current(&conn, name.as_str());
         }
 
-        Commands::SetCurrent { name } => {
-            let name = name.to_title_case();
-            operations::set_current(&conn, name.as_str());
+        Commands::SetDate {
+            date_type,
+            date,
+            name,
+        } => {
+            let _ = verify_name_exists(&conn, Some(name));
+            operations::set_date(&conn, name, date, date_type.to_owned());
+        }
+
+        Commands::SetStatus { watch_status, name } => {
+            let _ = verify_name_exists(&conn, name.as_deref());
+            operations::set_watch_status(&conn, watch_status, name.as_deref());
+        }
+
+        Commands::Complete { name, date } => {
+            let _ = verify_name_exists(&conn, name.as_deref());
+            set_completed(&conn, name.as_deref(), date.as_deref());
         }
     }
 
     println!("Main gets again");
+}
+
+fn verify_name_exists(conn: &Connection, name: Option<&str>) {
+    match name {
+        Some(name) => {
+            if !db::anime_by_name_exists(&conn, name).unwrap() {
+                invalid_arg_error(InvalidArgError::InvalidName);
+            }
+        }
+        None => {}
+    }
 }

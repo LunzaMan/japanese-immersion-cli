@@ -1,11 +1,18 @@
 use std::io::{self, Write};
 
-use anyhow::{Ok, bail};
+use clap::ArgAction::Set;
 use heck::ToTitleCase;
 use rusqlite::Connection;
 use serde_json::from_str;
+use tokio::sync::watch;
 
-use crate::{CardsCommand, EpisodeMutation, anilist_api, anime_api_data, db};
+use crate::{
+    CardsCommand, DateType, EpisodeMutation, anilist_api,
+    anime_api_data::{self, WatchStatus},
+    db::{self, episode_mutation},
+    error_ctrl::{self, InvalidArgError, invalid_arg_error},
+    utils,
+};
 
 pub async fn add(conn: &Connection, search_arg: Option<String>) {
     let mut input_text = String::new();
@@ -149,13 +156,8 @@ pub fn get_current(conn: &Connection) {
             anime.id, anime.title.english, current_episode, anime.episodes, anime.url
         );
     } else {
-        no_current_error();
+        invalid_arg_error(InvalidArgError::Current);
     }
-}
-
-fn no_current_error() -> ! {
-    eprint!("No anime is set as current. Set one anime as current before using");
-    std::process::exit(1);
 }
 
 pub fn add_card(
@@ -179,12 +181,18 @@ pub fn add_card(
 
 fn get_anime_from_option(conn: &Connection, name: &Option<&str>) -> anime_api_data::Anime {
     let anime = match name {
-        Some(name) => db::anime_query_by_name(conn, name).unwrap(),
+        Some(name) => {
+            let is_exist = db::anime_by_name_exists(conn, name).unwrap();
+            if !is_exist {
+                invalid_arg_error(InvalidArgError::InvalidName);
+            }
+            db::anime_query_by_name(conn, name).unwrap()
+        }
         None => {
             if db::current_exists(conn).unwrap() {
                 db::query_current(conn).unwrap()
             } else {
-                no_current_error();
+                invalid_arg_error(InvalidArgError::Current);
             }
         }
     };
@@ -197,28 +205,37 @@ pub fn update_episode_count(
     mut_type: &EpisodeMutation,
     name: &Option<&str>,
     number: Option<u16>,
-) -> Result<(), anyhow::Error> {
-    let anime = get_anime_from_option(conn, name);
+) {
+    let anime = utils::return_anime_if_exists(conn, name.as_deref());
 
+    let already_completed;
     match mut_type {
         EpisodeMutation::Set { number } => {
+            already_completed = true;
             if number > &anime.episodes {
-                bail!("Error: Invalid episode count");
+                invalid_arg_error(InvalidArgError::InvalidEpisodeCount);
             }
         }
-        _ => {}
+        _ => {
+            if anime.episodes == anime.episode_progress.unwrap() {
+                println!("Anim was already completed adding it to completed");
+                already_completed = true;
+            } else {
+                already_completed = false;
+            }
+        }
     };
 
-    let _ = db::episode_mutation(conn, mut_type, name, number);
+    if !already_completed {
+        let _ = db::episode_mutation(conn, mut_type, name, number);
+    }
 
     let anime = get_anime_from_option(conn, name);
 
     if anime.episodes == anime.episode_progress.unwrap() {
-        //todo: set completed
-        println!("Set completed");
+        println!("Anime Set to Completed");
+        set_completed(conn, name.as_deref(), None);
     }
-
-    Ok(())
 }
 
 pub fn set_current(conn: &Connection, name: &str) {
@@ -239,7 +256,7 @@ pub fn set_current(conn: &Connection, name: &str) {
             println!("{} was already current anime", selected_anime.title.english);
 
             if is_planning {
-                let _ = db::start_date_mutation(conn, name);
+                let _ = db::date_mutation(conn, name, None, DateType::Start);
             }
 
             return;
@@ -251,7 +268,7 @@ pub fn set_current(conn: &Connection, name: &str) {
     let _ = db::set_current(conn, name).unwrap();
 
     if is_planning {
-        let _ = db::start_date_mutation(conn, name);
+        let _ = db::date_mutation(conn, name, None, DateType::Start);
     }
 
     let anime = get_anime_from_option(conn, &None);
@@ -264,4 +281,103 @@ pub fn set_current(conn: &Connection, name: &str) {
         anime.episode_progress.unwrap(),
         anime.episodes
     );
+}
+
+pub fn set_date(conn: &Connection, name: &str, date: &str, date_type: DateType) {
+    let _ = db::date_mutation(conn, name, Some(date), date_type);
+
+    let anime = db::anime_query_by_name(conn, name).unwrap();
+
+    println!(
+        "{}. {} {}/{} | start-date: {}",
+        anime.id,
+        anime.title.english,
+        anime.episode_progress.unwrap_or_else(|| 0),
+        anime.episodes,
+        anime.date_started.unwrap_or_else(|| "None".to_string())
+    );
+}
+
+pub fn set_watch_status(
+    conn: &Connection,
+    watch_status: &anime_api_data::WatchStatus,
+    name: Option<&str>,
+) {
+    let anime = utils::return_anime_if_exists(conn, name);
+
+    let prev_watch_status = anime.watch_status.unwrap();
+    if watch_status.to_owned() == prev_watch_status {
+        println!("{} was already the status", prev_watch_status);
+        error_ctrl::exit_app();
+    }
+
+    let _ = db::watch_status_mutation(conn, watch_status, name);
+
+    let anime = utils::return_anime_if_exists(conn, name);
+
+    println!(
+        "{}. {} {}/{} | start-date: {}",
+        anime.id,
+        anime.title.english,
+        anime.episode_progress.unwrap(),
+        anime.episodes,
+        anime.watch_status.unwrap()
+    );
+}
+
+pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) {
+    let anime = utils::return_anime_if_exists(conn, name);
+
+    let prev_watch_status = anime.watch_status.unwrap();
+
+    match prev_watch_status {
+        WatchStatus::Completed => {
+            println!("{} was already set to completed", anime.title.english);
+            error_ctrl::exit_app();
+        }
+        _ => {}
+    };
+
+    let total_episodes = anime.episodes;
+
+    let _ = db::episode_mutation(
+        conn,
+        &EpisodeMutation::Set {
+            number: total_episodes,
+        },
+        &name,
+        Some(total_episodes),
+    );
+
+    let _ = db::watch_status_mutation(conn, &WatchStatus::Completed, name);
+
+    let prev_date_completed = anime.date_completed;
+    match prev_date_completed {
+        None => {
+            let _ = db::date_mutation(conn, anime.title.english.as_str(), date, DateType::End);
+        }
+        Some(prev_date_completed) => {
+            let mut user_input = String::new();
+
+            println!(
+                "Anime was completed on {}. Do you want to override(y/N)",
+                prev_date_completed
+            );
+            std::io::stdin()
+                .read_line(&mut user_input)
+                .expect("Couldn't read line");
+
+            match user_input.to_lowercase().as_str() {
+                "y" => {
+                    let _ =
+                        db::date_mutation(conn, anime.title.english.as_str(), date, DateType::End);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if anime.is_current.unwrap() == true {
+        let _ = db::remove_current(conn);
+    }
 }
