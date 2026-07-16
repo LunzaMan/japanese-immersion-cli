@@ -3,6 +3,10 @@ name = "japanese-immersion-cli"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "ji-cli"
+path = "src/main.rs"
+
 [dependencies]
 serde_json = "1.0.150"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -14,4 +18,7 @@ clap = { version = "4.6.1", features = ["derive"] }
 heck = "0.5.0"
 anyhow = "1.0.103"
 chrono = "0.4.45"
+clap_complete = "4.6.7"
+csv = "1.4.0"
+dirs = "6.0.0"
 

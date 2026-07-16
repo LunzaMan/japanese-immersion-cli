@@ -11,8 +11,9 @@ use crate::{
     },
     error_ctrl::{InvalidArgError, invalid_arg_error},
 };
+use std::path::PathBuf;
 
-pub fn connect(db_path: &str) -> Connection {
+pub fn connect(db_path: PathBuf) -> Connection {
     let conn = Connection::open(db_path).expect("Can't connect to db");
 
     if !conn.table_exists(None, "anime").unwrap() {
@@ -34,8 +35,6 @@ pub fn connect(db_path: &str) -> Connection {
                     watch_sequence INTEGER,
                     watch_status TEXT,
                     media_type TEXT
-
-
                 ), STRICT
             ",
             (),
@@ -49,7 +48,6 @@ pub fn connect(db_path: &str) -> Connection {
         .expect("Failed creating unique index");
     }
 
-    println!("Connected to Database");
     conn
 }
 
@@ -136,9 +134,9 @@ pub fn query_list(
                 parameters.push(list_type.to_string().trim().to_owned());
             }
         },
-        _ => {
-            stmt = conn.prepare("SELECT * FROM anime")?;
-        }
+        // _ => {
+        //     stmt = conn.prepare("SELECT * FROM anime")?;
+        // }
     }
 
     let result = anime_query(&mut stmt, params_from_iter(parameters)).unwrap();
@@ -146,8 +144,6 @@ pub fn query_list(
 }
 
 pub fn anime_query_by_name(conn: &Connection, name: &str) -> rusqlite::Result<Anime> {
-    println!("{}", name);
-
     let sql = format!(
         "
         select * from anime
@@ -192,15 +188,15 @@ fn anime_query<P: Params>(
                 },
                 date_started: row.get(4)?,
                 date_completed: row.get(5)?,
-                episodes: row.get(6)?,
-                episode_progress: row.get(7)?,
-                anki_flashcards: row.get(8)?,
-                is_current: row.get(9)?,
-                url: row.get(10)?,
-                watch_sequence: row.get(11)?,
-                watch_status: row.get(12)?,
-                media_type: row.get(13)?,
-                date_added: row.get(14)?,
+                date_added: row.get("date_added")?,
+                episodes: row.get("total_episodes")?,
+                episode_progress: row.get("episode_progress")?,
+                anki_flashcards: row.get("anki_flashcards")?,
+                is_current: row.get("is_current")?,
+                url: row.get("anilist_url")?,
+                watch_sequence: row.get("watch_sequence")?,
+                watch_status: row.get("watch_status")?,
+                media_type: row.get("media_type")?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -291,7 +287,6 @@ pub fn episode_mutation(
 
     let sql = format!("{base}\n{set_clause}\n{where_clause}");
 
-    println!("{}", sql);
     conn.execute(&sql, [])?;
 
     Ok(())
@@ -399,4 +394,16 @@ pub fn watch_status_mutation(
     let sql = format!("{sql_header}\n{sql_footer}");
     conn.execute(&sql, params_from_iter(params))?;
     Ok(())
+}
+
+pub fn query_all(conn: &Connection) -> rusqlite::Result<Vec<Anime>> {
+    let mut sql = conn.prepare(
+        "
+        SELECT * from anime;
+        ",
+    )?;
+
+    let anime = anime_query(&mut sql, [])?;
+
+    Ok(anime)
 }

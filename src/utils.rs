@@ -1,12 +1,12 @@
-use rusqlite::Connection;
-
 use crate::{
-    anime_api_data::Anime,
+    anime_api_data::{Anime, AnimeForExport},
     db,
-    error_ctrl::{InvalidArgError, invalid_arg_error},
+    error_ctrl::{self, InvalidArgError, invalid_arg_error},
 };
+use csv::Writer;
+use rusqlite::Connection;
+use std::{error::Error, path::PathBuf};
 
-// If name given check if it exists and return. If not then check if current exists then return
 pub fn return_anime_if_exists(conn: &Connection, name: Option<&str>) -> Anime {
     let anime: Anime;
     match name {
@@ -27,4 +27,81 @@ pub fn return_anime_if_exists(conn: &Connection, name: Option<&str>) -> Anime {
     };
 
     anime
+}
+
+pub fn path_initialization() -> std::path::PathBuf {
+    let mut file_path = dirs::data_local_dir().expect("Couldn't load local data directory");
+
+    file_path.push("japanese_immersion_cli/");
+
+    if !file_path.exists() {
+        std::fs::create_dir(&file_path).expect("Counldn't create directory");
+    }
+
+    file_path.push("anime_db.db3");
+
+    file_path
+}
+
+pub fn initialize_export_to_csv(conn: &Connection, path: &Option<PathBuf>) {
+    // Check if path exists
+    let mut final_path = PathBuf::new();
+    match path {
+        Some(path) => {
+            if path.starts_with("~/") {
+                let new_path = path
+                    .to_owned()
+                    .into_os_string()
+                    .into_string()
+                    .expect("Couldn't parse into string");
+
+                let x = new_path.trim_start_matches("~/");
+                let x_as_path = PathBuf::from(x);
+
+                let home = dirs::home_dir().unwrap();
+                final_path.push(home);
+                final_path.push(x_as_path);
+            } else {
+                final_path = path.to_owned();
+            }
+
+            if !final_path.exists() {
+                error_ctrl::invalid_arg_error(InvalidArgError::InvalidPath);
+            }
+        }
+        None => final_path = dirs::download_dir().unwrap(),
+    };
+
+    let _ = export_to_csv(conn, final_path);
+}
+
+fn export_to_csv(conn: &Connection, path: PathBuf) -> Result<(), Box<dyn Error>> {
+    let animes = db::query_all(conn).unwrap();
+
+    let file = path.join("data.csv");
+
+    let mut wtr = Writer::from_path(file).unwrap();
+
+    for anime in animes {
+        wtr.serialize(AnimeForExport {
+            id: anime.id,
+            episodes: anime.episodes,
+            english_title: anime.title.english,
+            romaji_title: anime.title.romaji,
+            native_title: anime.title.native,
+            media_type: anime.media_type,
+            url: anime.url,
+            anki_flashcards: anime.anki_flashcards,
+            is_current: anime.is_current,
+            date_started: anime.date_started,
+            date_completed: anime.date_completed,
+            episode_progress: anime.episode_progress,
+            watch_status: anime.watch_status,
+            watch_sequence: anime.watch_sequence,
+            date_added: anime.date_added,
+        })?;
+        wtr.flush()?;
+    }
+
+    Ok(())
 }

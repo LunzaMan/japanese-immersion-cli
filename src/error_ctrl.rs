@@ -3,6 +3,7 @@ pub enum InvalidArgError {
     InvalidName,
     Date,
     InvalidEpisodeCount,
+    InvalidPath,
 }
 
 pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
@@ -18,6 +19,9 @@ pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
         }
         InvalidArgError::InvalidEpisodeCount => {
             eprint!("Error: Invalid episode count")
+        }
+        InvalidArgError::InvalidPath => {
+            eprint!("Error: Path doesn't exist")
         }
     };
 

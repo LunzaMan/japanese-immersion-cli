@@ -1,15 +1,13 @@
 use std::io::{self, Write};
 
-use clap::ArgAction::Set;
 use heck::ToTitleCase;
 use rusqlite::Connection;
 use serde_json::from_str;
-use tokio::sync::watch;
 
 use crate::{
     CardsCommand, DateType, EpisodeMutation, anilist_api,
     anime_api_data::{self, WatchStatus},
-    db::{self, episode_mutation},
+    db::{self},
     error_ctrl::{self, InvalidArgError, invalid_arg_error},
     utils,
 };
@@ -21,10 +19,8 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
     // todo here match could be used to make code better
     let search_value;
     let x = search_arg.unwrap_or_else(|| "".to_string().trim().to_string());
-    println!("{}", x);
 
     if x.is_empty() {
-        println!("No x");
         print!("Anime Name: ");
         let _ = io::stdout().flush();
         input
@@ -33,7 +29,6 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
 
         search_value = &input_text;
     } else {
-        println!("Yes x");
         search_value = &x;
     }
 
@@ -100,6 +95,7 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
         };
     }
 
+    //todo: If they don't choose watching then don't show this message
     println!("Set anime as currently watching?(y/N)");
     println!("If set to currently watching then date started will be set to today");
     input_text.clear();
@@ -218,7 +214,7 @@ pub fn update_episode_count(
         }
         _ => {
             if anime.episodes == anime.episode_progress.unwrap() {
-                println!("Anim was already completed adding it to completed");
+                println!("Anime was already completed adding it to completed");
                 already_completed = true;
             } else {
                 already_completed = false;

@@ -34,17 +34,17 @@ impl FromSql for WatchStatus {
 
 pub enum MediaType {
     Anime,
-    Manga,
-    LightNovel,
+    // Manga,
+    // LightNovel,
 }
 
 impl fmt::Display for MediaType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MediaType::Anime => write!(f, "ANIME"),
-            MediaType::Manga => write!(f, "MANGA"),
-            // Never gonna use but if used then i dont know if anilist api uses LN or LIGHTNOVEL
-            MediaType::LightNovel => write!(f, "LN"),
+            // MediaType::Manga => write!(f, "MANGA"),
+            // // Never gonna use but if used then i dont know if anilist api uses LN or LIGHTNOVEL
+            // MediaType::LightNovel => write!(f, "LN"),
         }
     }
 }
@@ -92,6 +92,27 @@ pub struct Title {
     pub english: String,
     pub native: String,
     pub romaji: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AnimeForExport {
+    pub id: u32,
+    pub episodes: u16,
+    pub english_title: String,
+    pub romaji_title: String,
+    pub native_title: String,
+    #[serde(rename = "type")]
+    pub media_type: String,
+    #[serde(rename = "siteUrl")]
+    pub url: String,
+    pub anki_flashcards: Option<u32>,
+    pub is_current: Option<bool>,
+    pub date_started: Option<String>,
+    pub date_completed: Option<String>,
+    pub episode_progress: Option<u16>,
+    pub watch_status: Option<WatchStatus>,
+    pub watch_sequence: Option<u32>,
+    pub date_added: Option<String>,
 }
 
 impl Anime {

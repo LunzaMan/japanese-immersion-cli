@@ -1,5 +1,6 @@
+use std::path;
+
 use clap::{Parser, Subcommand, ValueEnum};
-use heck::ToTitleCase;
 use rusqlite::Connection;
 
 use crate::{
@@ -63,6 +64,10 @@ enum Commands {
         #[arg(long)]
         date: Option<String>,
     },
+    Export {
+        #[arg(long)]
+        path: Option<path::PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -86,7 +91,8 @@ pub enum DateType {
 
 #[tokio::main]
 async fn main() {
-    let conn = db::connect("list.db3");
+    let file_path = utils::path_initialization();
+    let conn = db::connect(file_path);
     let args = Args::parse();
 
     match &args.command {
@@ -168,9 +174,11 @@ async fn main() {
             let _ = verify_name_exists(&conn, name.as_deref());
             set_completed(&conn, name.as_deref(), date.as_deref());
         }
-    }
 
-    println!("Main gets again");
+        Commands::Export { path } => {
+            let _ = utils::initialize_export_to_csv(&conn, path);
+        }
+    }
 }
 
 fn verify_name_exists(conn: &Connection, name: Option<&str>) {
