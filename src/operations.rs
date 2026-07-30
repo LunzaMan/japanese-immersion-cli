@@ -1,6 +1,5 @@
 use std::io::{self, Write};
 
-use heck::ToTitleCase;
 use rusqlite::Connection;
 use serde_json::from_str;
 
@@ -9,6 +8,7 @@ use crate::{
     anime_api_data::{self, WatchStatus},
     db::{self},
     error_ctrl::{self, InvalidArgError, invalid_arg_error},
+    output::{self, PrintStyle},
     utils,
 };
 
@@ -53,7 +53,7 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
     let id = &result_arr[x - 1]["id"].as_number().unwrap();
     let anime_json = anilist_api::get_by_id(id).await["data"]["Media"].to_string();
 
-    // todo: use only one api call instead of 2 to increase speed
+    // todo: use only one ai call instead of 2 to increase speed
     let anime = from_str::<anime_api_data::Anime>(&anime_json).expect("Could create object");
 
     println!(
@@ -126,11 +126,7 @@ pub fn list(conn: &Connection, list_type: anime_api_data::ListType) {
     if result.is_empty() {
         println!("No {} anime in database ", list_type);
     } else {
-        let result_iter = result.iter();
-
-        for anime in result_iter {
-            println!("{}. {} ({})", anime.id, anime.title.english, anime.url);
-        }
+        output::list_print(result);
     }
 }
 
@@ -138,19 +134,7 @@ pub fn get_current(conn: &Connection) {
     if db::current_exists(conn).unwrap() {
         let anime = db::query_current(conn).unwrap();
 
-        let current_episode: u16;
-
-        let x = anime.episode_progress;
-        match x {
-            Some(x) => current_episode = x,
-            None => {
-                current_episode = 0;
-            }
-        }
-        println!(
-            "{}. {} {}/{} ({})",
-            anime.id, anime.title.english, current_episode, anime.episodes, anime.url
-        );
+        output::single_print(anime, output::PrintStyle::Current);
     } else {
         invalid_arg_error(InvalidArgError::Current);
     }
@@ -166,13 +150,7 @@ pub fn add_card(
 
     let anime = get_anime_from_option(conn, name);
 
-    let db_number = anime.anki_flashcards;
-    let updated_number;
-    match db_number {
-        Some(db_number) => updated_number = db_number,
-        None => updated_number = 0,
-    }
-    println!("{} {} {}", anime.id, anime.title.english, updated_number);
+    output::single_print(anime, PrintStyle::Anki);
 }
 
 fn get_anime_from_option(conn: &Connection, name: &Option<&str>) -> anime_api_data::Anime {
@@ -237,8 +215,7 @@ pub fn update_episode_count(
 pub fn set_current(conn: &Connection, name: &str) {
     let is_prev_current = db::current_exists(conn).unwrap();
 
-    let anime_name = name.to_title_case();
-    let selected_anime = get_anime_from_option(conn, &Some(&anime_name.as_str()));
+    let selected_anime = get_anime_from_option(conn, &Some(&name));
 
     let is_planning = match selected_anime.watch_status.unwrap() {
         anime_api_data::WatchStatus::Planning => true,
@@ -252,7 +229,7 @@ pub fn set_current(conn: &Connection, name: &str) {
             println!("{} was already current anime", selected_anime.title.english);
 
             if is_planning {
-                let _ = db::date_mutation(conn, name, None, DateType::Start);
+                let _ = db::date_mutation(conn, name, None, &DateType::Start);
             }
 
             return;
@@ -264,34 +241,28 @@ pub fn set_current(conn: &Connection, name: &str) {
     let _ = db::set_current(conn, name).unwrap();
 
     if is_planning {
-        let _ = db::date_mutation(conn, name, None, DateType::Start);
+        let _ = db::date_mutation(conn, name, None, &DateType::Start);
     }
 
     let anime = get_anime_from_option(conn, &None);
 
     println!("Current anime:");
-    println!(
-        "{}. {} {}/{}",
-        anime.id,
-        anime.title.english,
-        anime.episode_progress.unwrap(),
-        anime.episodes
-    );
+    output::single_print(anime, output::PrintStyle::Current);
 }
 
 pub fn set_date(conn: &Connection, name: &str, date: &str, date_type: DateType) {
-    let _ = db::date_mutation(conn, name, Some(date), date_type);
+    let _ = db::date_mutation(conn, name, Some(date), &date_type);
 
     let anime = db::anime_query_by_name(conn, name).unwrap();
 
-    println!(
-        "{}. {} {}/{} | start-date: {}",
-        anime.id,
-        anime.title.english,
-        anime.episode_progress.unwrap_or_else(|| 0),
-        anime.episodes,
-        anime.date_started.unwrap_or_else(|| "None".to_string())
-    );
+    match date_type {
+        DateType::Start => {
+            output::single_print(anime, PrintStyle::StartDate);
+        }
+        DateType::End => {
+            output::single_print(anime, PrintStyle::EndDate);
+        }
+    };
 }
 
 pub fn set_watch_status(
@@ -311,14 +282,7 @@ pub fn set_watch_status(
 
     let anime = utils::return_anime_if_exists(conn, name);
 
-    println!(
-        "{}. {} {}/{} | start-date: {}",
-        anime.id,
-        anime.title.english,
-        anime.episode_progress.unwrap(),
-        anime.episodes,
-        anime.watch_status.unwrap()
-    );
+    output::single_print(anime, PrintStyle::WatchStatus);
 }
 
 pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) {
@@ -350,7 +314,7 @@ pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) 
     let prev_date_completed = anime.date_completed;
     match prev_date_completed {
         None => {
-            let _ = db::date_mutation(conn, anime.title.english.as_str(), date, DateType::End);
+            let _ = db::date_mutation(conn, anime.title.english.as_str(), date, &DateType::End);
         }
         Some(prev_date_completed) => {
             let mut user_input = String::new();
@@ -366,7 +330,7 @@ pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) 
             match user_input.to_lowercase().as_str() {
                 "y" => {
                     let _ =
-                        db::date_mutation(conn, anime.title.english.as_str(), date, DateType::End);
+                        db::date_mutation(conn, anime.title.english.as_str(), date, &DateType::End);
                 }
                 _ => {}
             }

@@ -13,12 +13,10 @@ serde = { version = "1.0.228", features = ["derive"] }
 reqwest = "0.13.4"
 tokio = {version = "1.52.3", features = ["macros", "rt-multi-thread"]}
 rusqlite = { version = "0.40.1", features = ["bundled"] }
-r2d2 = "0.8.10"
 clap = { version = "4.6.1", features = ["derive"] }
-heck = "0.5.0"
-anyhow = "1.0.103"
 chrono = "0.4.45"
 clap_complete = "4.6.7"
 csv = "1.4.0"
 dirs = "6.0.0"
+colored = "3.1.1"
 

@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use heck::ToTitleCase;
 use rusqlite::{Connection, Params, Result, Statement, named_params, params, params_from_iter};
 
 use crate::{
@@ -223,7 +222,7 @@ pub fn add_card_mutation(
             ",
             named_params! {
                 ":number" : number_of_cards,
-                ":name" : name.to_title_case(),
+                ":name" : name,
             },
         )?,
         (CardsCommand::Total, Some(name)) => conn.execute(
@@ -235,7 +234,7 @@ pub fn add_card_mutation(
             ",
             named_params! {
                 ":number" : number_of_cards,
-                ":name" : name.to_title_case(),
+                ":name" : name,
             },
         )?,
 
@@ -257,7 +256,7 @@ pub fn episode_mutation(
     let base = "UPDATE anime";
     let where_clause = match name {
         Some(name) => {
-            let name_ = name.to_title_case();
+            let name_ = name;
             format!(
                 "WHERE english_name = '{name_}' COLLATE NOCASE
             OR romaji_name = '{name_}' COLLATE NOCASE
@@ -325,7 +324,7 @@ pub fn date_mutation(
     conn: &Connection,
     name: &str,
     date: Option<&str>,
-    date_type: DateType,
+    date_type: &DateType,
 ) -> rusqlite::Result<()> {
     let sql_head = "UPDATE anime";
     let where_clause = "

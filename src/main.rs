@@ -13,6 +13,7 @@ mod anime_api_data;
 mod db;
 mod error_ctrl;
 mod operations;
+mod output;
 mod utils;
 
 #[derive(Parser)]
