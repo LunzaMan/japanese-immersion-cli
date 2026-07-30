@@ -69,6 +69,7 @@ enum Commands {
         #[arg(long)]
         path: Option<path::PathBuf>,
     },
+    Test,
 }
 
 #[derive(Subcommand)]
@@ -179,6 +180,8 @@ async fn main() {
         Commands::Export { path } => {
             let _ = utils::initialize_export_to_csv(&conn, path);
         }
+
+        Commands::Test => {}
     }
 }
 

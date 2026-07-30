@@ -4,6 +4,8 @@ pub enum InvalidArgError {
     Date,
     InvalidEpisodeCount,
     InvalidPath,
+    InvalidChoice,
+    InvalidAnime,
 }
 
 pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
@@ -22,6 +24,12 @@ pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
         }
         InvalidArgError::InvalidPath => {
             eprint!("Error: Path doesn't exist")
+        }
+        InvalidArgError::InvalidChoice => {
+            eprint!("Error: Invalid Choice")
+        }
+        InvalidArgError::InvalidAnime => {
+            eprint!("Error: No such anime found")
         }
     };
 

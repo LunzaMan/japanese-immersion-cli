@@ -1,7 +1,8 @@
 use std::io::{self, Write};
 
+use clap::builder::Str;
 use rusqlite::Connection;
-use serde_json::from_str;
+use serde_json::{from_str, from_value};
 
 use crate::{
     CardsCommand, DateType, EpisodeMutation, anilist_api,
@@ -9,52 +10,50 @@ use crate::{
     db::{self},
     error_ctrl::{self, InvalidArgError, invalid_arg_error},
     output::{self, PrintStyle},
-    utils,
+    utils::{self, parse_browse},
 };
 
-pub async fn add(conn: &Connection, search_arg: Option<String>) {
+fn get_input(display_text: Option<&str>) -> String {
     let mut input_text = String::new();
-    let input = io::stdin();
 
-    // todo here match could be used to make code better
-    let search_value;
-    let x = search_arg.unwrap_or_else(|| "".to_string().trim().to_string());
-
-    if x.is_empty() {
-        print!("Anime Name: ");
-        let _ = io::stdout().flush();
-        input
-            .read_line(&mut input_text)
-            .expect("Failed to read line");
-
-        search_value = &input_text;
-    } else {
-        search_value = &x;
+    match display_text {
+        Some(display_text) => {
+            print!("{}", display_text);
+            io::stdout().flush().expect("Couldn't display display_text");
+        }
+        None => {}
     }
-
-    // todo: expriment: try to send ony the result array from use_api
-    // todo: fix the infinite running of api if title not found.
-    let result = anilist_api::browse(search_value.to_string()).await;
-    let result_arr = &result["data"]["Page"]["media"].as_array().unwrap();
-
-    for i in 0..result_arr.len() {
-        println!("{}. {}", i + 1, result_arr[i]["title"]["romaji"]);
-    }
-
-    // todo: add a quit function
-
-    input_text.clear();
-    input
+    io::stdin()
         .read_line(&mut input_text)
-        .expect("Failed to read line");
+        .expect("Input can't be read");
 
-    let x: usize = input_text.trim().parse().expect("Input is not a number");
+    input_text
+}
 
-    let id = &result_arr[x - 1]["id"].as_number().unwrap();
-    let anime_json = anilist_api::get_by_id(id).await["data"]["Media"].to_string();
+pub async fn add(conn: &Connection, search_arg: Option<String>) {
+    let search_value = match search_arg {
+        Some(search_arg) => search_arg,
+        None => get_input(Some("Anime Name: ")),
+    };
 
-    // todo: use only one ai call instead of 2 to increase speed
-    let anime = from_str::<anime_api_data::Anime>(&anime_json).expect("Could create object");
+    let result = parse_browse(search_value).await;
+
+    if result.is_empty() {
+        error_ctrl::invalid_arg_error(InvalidArgError::InvalidAnime);
+    }
+
+    for (i, anime) in result.iter().enumerate() {
+        println!("{}. {}", i + 1, anime.title.romaji)
+    }
+
+    let choice: usize = get_input(None)
+        .trim()
+        .parse()
+        .expect("Input is not a number");
+
+    let anime = result
+        .get(choice - 1)
+        .unwrap_or_else(|| error_ctrl::invalid_arg_error(InvalidArgError::InvalidChoice));
 
     println!(
         "Selected Anime: {}, Link:{}",
@@ -64,16 +63,13 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
 
     let watch_status: anime_api_data::WatchStatus;
     loop {
-        println!("Set Watch Status: \n1. Watching\n2. Planning\n3. Completed");
-
-        input_text.clear();
-        input
-            .read_line(&mut input_text)
-            .expect("Failed to read line");
-
         // Todo: When no input is given default to watching
-        // Todo: If not number then keep running. Also add a quit command
-        let watch_status_input: u8 = input_text.trim().parse().expect("Failed to parse input");
+        let watch_status_input: u8 = get_input(Some(
+            "Set Watch Status: \n1. Watching\n2. Planning\n3. Completed\n4. Quit",
+        ))
+        .trim()
+        .parse()
+        .expect("Failed to parse input");
 
         match watch_status_input {
             1 => {
@@ -88,6 +84,10 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
                 watch_status = anime_api_data::WatchStatus::Completed;
                 break;
             }
+            4 => {
+                println!("Terminating...");
+                error_ctrl::exit_app();
+            }
             _ => {
                 println!("Choose correct option");
                 anime_api_data::WatchStatus::Planning
@@ -95,28 +95,24 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
         };
     }
 
-    //todo: If they don't choose watching then don't show this message
-    println!("Set anime as currently watching?(y/N)");
-    println!("If set to currently watching then date started will be set to today");
-    input_text.clear();
-    input
-        .read_line(&mut input_text)
-        .expect("Failed to readline");
+    let is_current;
+    match watch_status {
+        WatchStatus::Watching => {
+            let choice = get_input(Some("Set anime as currently watching?(y/N)"));
 
-    let choice: char = input_text.remove(0);
-
-    let mut _is_current = false;
-
-    match choice {
-        'y' => {
-            _is_current = true;
+            match choice.to_lowercase().as_str() {
+                "y" => {
+                    is_current = true;
+                }
+                _ => {
+                    is_current = false;
+                }
+            }
         }
-        _ => {
-            _is_current = false;
-        }
+        _ => is_current = false,
     }
 
-    _ = db::add_anime(conn, anime, watch_status, _is_current);
+    _ = db::add_anime(conn, anime, watch_status, is_current);
 }
 
 pub fn list(conn: &Connection, list_type: anime_api_data::ListType) {

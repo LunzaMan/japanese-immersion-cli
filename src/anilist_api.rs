@@ -17,6 +17,8 @@ query ($search: String!) { Page {
                 romaji
             }
             siteUrl
+            episodes
+            type
         }
     }
 }
@@ -41,14 +43,18 @@ pub async fn browse(title: String) -> serde_json::Value {
     let query = SEARCH_QUERY;
     let json = json!({"query": query, "variables": {"search": title}});
     let result = use_api(json).await;
+
     result
 }
 
-pub async fn get_by_id(id: &&Number) -> serde_json::Value {
+pub async fn get_by_id(id: u32) -> serde_json::Value {
     let query = QUERY;
     let json = json!({"query": query, "variables": {"id": id}});
     let result = use_api(json).await;
-    result
+
+    let anime = result["data"]["Media"].clone();
+
+    anime
 }
 
 async fn use_api(body: serde_json::Value) -> serde_json::Value {

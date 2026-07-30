@@ -1,5 +1,6 @@
 use crate::{
-    anime_api_data::{Anime, AnimeForExport},
+    anilist_api,
+    anime_api_data::{self, Anime, AnimeForExport},
     db,
     error_ctrl::{self, InvalidArgError, invalid_arg_error},
 };
@@ -104,4 +105,19 @@ fn export_to_csv(conn: &Connection, path: PathBuf) -> Result<(), Box<dyn Error>>
     }
 
     Ok(())
+}
+
+pub async fn parse_browse(title: String) -> Vec<anime_api_data::Anime> {
+    let result = anilist_api::browse(title).await;
+    let filtered_result = result["data"]["Page"]["media"].clone();
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&filtered_result).unwrap()
+    );
+
+    let animes = serde_json::from_value::<Vec<anime_api_data::Anime>>(filtered_result)
+        .expect("Couldn't create object");
+
+    animes
 }

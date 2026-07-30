@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use core::fmt;
 
 use rusqlite::types::FromSql;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, ValueEnum, Clone)]
 pub enum WatchStatus {
@@ -71,6 +71,7 @@ impl fmt::Display for ListType {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Anime {
     pub id: u32,
+    #[serde(deserialize_with = "parse_episodes")]
     pub episodes: u16,
     pub title: Title,
     #[serde(rename = "type")]
@@ -89,9 +90,24 @@ pub struct Anime {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Title {
+    #[serde(deserialize_with = "parse_english_name")]
     pub english: String,
     pub native: String,
     pub romaji: String,
+}
+
+fn parse_english_name<'de, D>(d: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<String>::deserialize(d)?.unwrap_or_else(|| "Unknown".to_string()))
+}
+
+fn parse_episodes<'de, D>(d: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<u16>::deserialize(d)?.unwrap_or_else(|| 9999))
 }
 
 #[derive(Serialize, Deserialize, Debug)]

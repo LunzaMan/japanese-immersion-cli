@@ -52,7 +52,7 @@ pub fn connect(db_path: PathBuf) -> Connection {
 
 pub fn add_anime(
     conn: &Connection,
-    api_data: anime_api_data::Anime,
+    api_data: &anime_api_data::Anime,
     watch_status: anime_api_data::WatchStatus,
     is_current: bool,
 ) -> Result<()> {
