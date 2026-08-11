@@ -125,7 +125,7 @@ async fn main() {
             number,
             name,
         } => {
-            let _ = verify_name_exists(&conn, name.as_deref());
+            verify_name_exists(&conn, name.as_deref());
             operations::add_card(&conn, card_command, number, &name.as_deref());
         }
 
@@ -133,7 +133,7 @@ async fn main() {
             episode_mutation_type,
             name,
         } => {
-            let _ = verify_name_exists(&conn, name.as_deref());
+            verify_name_exists(&conn, name.as_deref());
             match episode_mutation_type {
                 EpisodeMutation::Set { number } => {
                     operations::update_episode_count(
@@ -154,7 +154,7 @@ async fn main() {
             }
         }
         Commands::SetCurrent { name } => {
-            let _ = verify_name_exists(&conn, Some(name));
+            verify_name_exists(&conn, Some(name));
             operations::set_current(&conn, name.as_str());
         }
 
@@ -163,22 +163,22 @@ async fn main() {
             date,
             name,
         } => {
-            let _ = verify_name_exists(&conn, Some(name));
+            verify_name_exists(&conn, Some(name));
             operations::set_date(&conn, name, date, date_type.to_owned());
         }
 
         Commands::SetStatus { watch_status, name } => {
-            let _ = verify_name_exists(&conn, name.as_deref());
+            verify_name_exists(&conn, name.as_deref());
             operations::set_watch_status(&conn, watch_status, name.as_deref());
         }
 
         Commands::Complete { name, date } => {
-            let _ = verify_name_exists(&conn, name.as_deref());
+            verify_name_exists(&conn, name.as_deref());
             set_completed(&conn, name.as_deref(), date.as_deref());
         }
 
         Commands::Export { path } => {
-            let _ = utils::initialize_export_to_csv(&conn, path);
+            utils::initialize_export_to_csv(&conn, path);
         }
 
         Commands::Test => {}
@@ -186,12 +186,9 @@ async fn main() {
 }
 
 fn verify_name_exists(conn: &Connection, name: Option<&str>) {
-    match name {
-        Some(name) => {
-            if !db::anime_by_name_exists(&conn, name).unwrap() {
-                invalid_arg_error(InvalidArgError::InvalidName);
-            }
-        }
-        None => {}
+    if let Some(extracted_name) = name
+        && !db::anime_by_name_exists(conn, extracted_name).unwrap()
+    {
+        invalid_arg_error(InvalidArgError::InvalidName);
     }
 }

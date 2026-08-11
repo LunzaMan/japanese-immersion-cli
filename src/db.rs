@@ -69,6 +69,7 @@ pub fn add_anime(
     }
 
     // todo: first check if anime already in list by using anilist id
+
     conn.execute(
             "INSERT INTO anime(id, english_name, romaji_name, native_name, date_added, total_episodes, is_current, anilist_url, watch_status, media_type) 
                  VALUES(?1, ?2, ?3, ?4, current_date, ?5, ?6, ?7, ?8, ?9 )",
@@ -167,7 +168,7 @@ pub fn anime_by_name_exists(conn: &Connection, name: &str) -> rusqlite::Result<b
         OR native_name = :name COLLATE NOCASE);
     ";
 
-    let result: bool = conn.query_row(&sql, named_params! {":name": name}, |row| row.get(0))?;
+    let result: bool = conn.query_row(sql, named_params! {":name": name}, |row| row.get(0))?;
 
     Ok(result)
 }
@@ -264,24 +265,20 @@ pub fn episode_mutation(
            ; "
             )
         }
-        None => format!("WHERE is_current=1;"),
+        None => "WHERE is_current=1;".to_string(),
     };
 
-    let set_clause: String;
-
-    match (episode_mutation_type, number) {
+    let set_clause: String = match (episode_mutation_type, number) {
         (_, Some(number)) => {
-            set_clause = format!("SET episode_progress = {number}");
+            format!("SET episode_progress = {number}")
         }
         (EpisodeMutation::Add, _) => {
-            set_clause = format!("SET episode_progress = COALESCE(episode_progress,0) + 1");
+            "SET episode_progress = COALESCE(episode_progress,0) + 1".to_string()
         }
         (EpisodeMutation::Subtract, _) => {
-            set_clause = format!("SET episode_progress = COALESCE(episode_progress,0) - 1");
+            "SET episode_progress = COALESCE(episode_progress,0) - 1".to_string()
         }
-        (_, _) => {
-            set_clause = format!("");
-        }
+        (_, _) => "".to_string(),
     };
 
     let sql = format!("{base}\n{set_clause}\n{where_clause}");
@@ -315,9 +312,7 @@ pub fn set_current(conn: &Connection, name: &str) -> rusqlite::Result<()> {
 }
 
 fn is_valid_date(date: &str) -> bool {
-    let is_valid = NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok();
-
-    is_valid
+    NaiveDate::parse_from_str(date, "%Y-%m-%d").is_ok()
 }
 
 pub fn date_mutation(
@@ -375,19 +370,18 @@ pub fn watch_status_mutation(
 ) -> rusqlite::Result<()> {
     let sql_header = "UPDATE anime SET watch_status = ?1";
 
-    let sql_footer;
     let mut params = Vec::new();
     params.push(watch_status.to_string());
-    match name {
+    let sql_footer = match name {
         Some(name) => {
             params.push(name.to_string());
-            sql_footer = "
+            "
             WHERE english_name = ?2 COLLATE NOCASE
             OR romaji_name = ?2 COLLATE NOCASE
             OR native_name = ?2 COLLATE NOCASE;
-                ";
+                "
         }
-        None => sql_footer = "WHERE is_current = 1",
+        None => "WHERE is_current = 1",
     };
 
     let sql = format!("{sql_header}\n{sql_footer}");

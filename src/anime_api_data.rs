@@ -107,7 +107,7 @@ fn parse_episodes<'de, D>(d: D) -> Result<u16, D::Error>
 where
     D: Deserializer<'de>,
 {
-    Ok(Option::<u16>::deserialize(d)?.unwrap_or_else(|| 9999))
+    Ok(Option::<u16>::deserialize(d)?.unwrap_or(9999))
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -132,6 +132,12 @@ pub struct AnimeForExport {
 }
 
 impl Anime {
+    pub fn resolve_unknown_name(&mut self) {
+        if self.title.english.to_lowercase() == "unknown" {
+            self.title.english = self.title.native.clone();
+        }
+    }
+
     // Getters
     pub fn get_id(&self) -> u32 {
         self.id

@@ -1,11 +1,9 @@
 use std::io::{self, Write};
 
-use clap::builder::Str;
 use rusqlite::Connection;
-use serde_json::{from_str, from_value};
 
 use crate::{
-    CardsCommand, DateType, EpisodeMutation, anilist_api,
+    CardsCommand, DateType, EpisodeMutation,
     anime_api_data::{self, WatchStatus},
     db::{self},
     error_ctrl::{self, InvalidArgError, invalid_arg_error},
@@ -16,13 +14,11 @@ use crate::{
 fn get_input(display_text: Option<&str>) -> String {
     let mut input_text = String::new();
 
-    match display_text {
-        Some(display_text) => {
-            print!("{}", display_text);
-            io::stdout().flush().expect("Couldn't display display_text");
-        }
-        None => {}
+    if let Some(display_text) = display_text {
+        print!("{}", display_text);
+        io::stdout().flush().expect("couldn't display display_text");
     }
+
     io::stdin()
         .read_line(&mut input_text)
         .expect("Input can't be read");
@@ -36,7 +32,7 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
         None => get_input(Some("Anime Name: ")),
     };
 
-    let result = parse_browse(search_value).await;
+    let mut result = parse_browse(search_value).await;
 
     if result.is_empty() {
         error_ctrl::invalid_arg_error(InvalidArgError::InvalidAnime);
@@ -52,7 +48,7 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
         .expect("Input is not a number");
 
     let anime = result
-        .get(choice - 1)
+        .get_mut(choice - 1)
         .unwrap_or_else(|| error_ctrl::invalid_arg_error(InvalidArgError::InvalidChoice));
 
     println!(
@@ -112,6 +108,8 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
         _ => is_current = false,
     }
 
+    // todo : set anime english name to romaji if unknown
+    anime.resolve_unknown_name();
     _ = db::add_anime(conn, anime, watch_status, is_current);
 }
 
@@ -150,7 +148,7 @@ pub fn add_card(
 }
 
 fn get_anime_from_option(conn: &Connection, name: &Option<&str>) -> anime_api_data::Anime {
-    let anime = match name {
+    match name {
         Some(name) => {
             let is_exist = db::anime_by_name_exists(conn, name).unwrap();
             if !is_exist {
@@ -165,9 +163,24 @@ fn get_anime_from_option(conn: &Connection, name: &Option<&str>) -> anime_api_da
                 invalid_arg_error(InvalidArgError::Current);
             }
         }
-    };
+    }
 
-    anime
+    // let anime = match name {
+    //     Some(name) => {
+    //         let is_exist = db::anime_by_name_exists(conn, name).unwrap();
+    //         if !is_exist {
+    //             invalid_arg_error(InvalidArgError::InvalidName);
+    //         }
+    //         db::anime_query_by_name(conn, name).unwrap()
+    //     }
+    //     None => {
+    //         if db::current_exists(conn).unwrap() {
+    //             db::query_current(conn).unwrap()
+    //         } else {
+    //             invalid_arg_error(InvalidArgError::Current);
+    //         }
+    //     }
+    // };
 }
 
 pub fn update_episode_count(
@@ -211,12 +224,17 @@ pub fn update_episode_count(
 pub fn set_current(conn: &Connection, name: &str) {
     let is_prev_current = db::current_exists(conn).unwrap();
 
-    let selected_anime = get_anime_from_option(conn, &Some(&name));
+    let selected_anime = get_anime_from_option(conn, &Some(name));
 
-    let is_planning = match selected_anime.watch_status.unwrap() {
-        anime_api_data::WatchStatus::Planning => true,
-        _ => false,
-    };
+    let is_planning = matches!(
+        selected_anime.watch_status,
+        Some(anime_api_data::WatchStatus::Planning)
+    );
+
+    // let is_planning = match selected_anime.watch_status.unwrap() {
+    //     anime_api_data::WatchStatus::Planning => true,
+    //     _ => false,
+    // };
 
     if is_prev_current {
         let prev_current_anime = db::query_current(conn).unwrap();
@@ -231,10 +249,9 @@ pub fn set_current(conn: &Connection, name: &str) {
             return;
         }
 
-        let _ = db::remove_current(conn).unwrap();
+        db::remove_current(conn).unwrap();
     }
-
-    let _ = db::set_current(conn, name).unwrap();
+    db::set_current(conn, name).unwrap();
 
     if is_planning {
         let _ = db::date_mutation(conn, name, None, &DateType::Start);
@@ -269,7 +286,7 @@ pub fn set_watch_status(
     let anime = utils::return_anime_if_exists(conn, name);
 
     let prev_watch_status = anime.watch_status.unwrap();
-    if watch_status.to_owned() == prev_watch_status {
+    if watch_status == &prev_watch_status {
         println!("{} was already the status", prev_watch_status);
         error_ctrl::exit_app();
     }
@@ -286,13 +303,10 @@ pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) 
 
     let prev_watch_status = anime.watch_status.unwrap();
 
-    match prev_watch_status {
-        WatchStatus::Completed => {
-            println!("{} was already set to completed", anime.title.english);
-            error_ctrl::exit_app();
-        }
-        _ => {}
-    };
+    if prev_watch_status == WatchStatus::Completed {
+        println!("{} was already set to completed", anime.title.english);
+        error_ctrl::exit_app();
+    }
 
     let total_episodes = anime.episodes;
 
@@ -323,17 +337,13 @@ pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) 
                 .read_line(&mut user_input)
                 .expect("Couldn't read line");
 
-            match user_input.to_lowercase().as_str() {
-                "y" => {
-                    let _ =
-                        db::date_mutation(conn, anime.title.english.as_str(), date, &DateType::End);
-                }
-                _ => {}
+            if user_input.to_lowercase() == "y" {
+                let _ = db::date_mutation(conn, anime.title.english.as_str(), date, &DateType::End);
             }
         }
     }
 
-    if anime.is_current.unwrap() == true {
+    if anime.is_current.unwrap() {
         let _ = db::remove_current(conn);
     }
 }

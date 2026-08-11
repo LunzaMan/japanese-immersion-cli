@@ -46,7 +46,7 @@ pub fn single_print(anime: anime_api_data::Anime, print_style: PrintStyle) {
         PrintStyle::Anki => {
             let cards = anime
                 .anki_flashcards
-                .unwrap_or_else(|| 0)
+                .unwrap_or(0)
                 .to_string()
                 .bright_purple();
             let output_string = format!("{base_string} | {cards} ");
@@ -55,7 +55,7 @@ pub fn single_print(anime: anime_api_data::Anime, print_style: PrintStyle) {
         PrintStyle::WatchStatus => {
             let status = anime
                 .watch_status
-                .unwrap_or_else(|| anime_api_data::WatchStatus::Planning)
+                .unwrap_or(anime_api_data::WatchStatus::Planning)
                 .to_string()
                 .bright_purple();
             let output_string = format!("{base_string} | {status} ");

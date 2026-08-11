@@ -1,5 +1,5 @@
 use reqwest::Client;
-use serde_json::{Number, json};
+use serde_json::json;
 // use serde::{Serialize, Deserialize};
 //
 // #[derive(Serialize, Deserialize, Debug)]
@@ -24,38 +24,36 @@ query ($search: String!) { Page {
 }
 ";
 
-const QUERY: &str = "
-    query ($id: Int) { 
-        Media (id: $id, type: ANIME) { 
-            id
-            title {
-                native
-                english
-                romaji
-            }
-            episodes
-            siteUrl
-            type
-        }
-    }
-";
+// const QUERY: &str = "
+//     query ($id: Int) {
+//         Media (id: $id, type: ANIME) {
+//             id
+//             title {
+//                 native
+//                 english
+//                 romaji
+//             }
+//             episodes
+//             siteUrl
+//             type
+//         }
+//     }
+// ";
 pub async fn browse(title: String) -> serde_json::Value {
     let query = SEARCH_QUERY;
     let json = json!({"query": query, "variables": {"search": title}});
-    let result = use_api(json).await;
-
-    result
+    use_api(json).await
 }
 
-pub async fn get_by_id(id: u32) -> serde_json::Value {
-    let query = QUERY;
-    let json = json!({"query": query, "variables": {"id": id}});
-    let result = use_api(json).await;
-
-    let anime = result["data"]["Media"].clone();
-
-    anime
-}
+// pub async fn get_by_id(id: u32) -> serde_json::Value {
+//     let query = QUERY;
+//     let json = json!({"query": query, "variables": {"id": id}});
+//     let result = use_api(json).await;
+//
+//     let anime = result["data"]["Media"].clone();
+//
+//     anime
+// }
 
 async fn use_api(body: serde_json::Value) -> serde_json::Value {
     let client = Client::new();
