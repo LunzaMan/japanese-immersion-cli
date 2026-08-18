@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    ops::Deref,
+};
 
 use rusqlite::Connection;
 
@@ -59,14 +62,15 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
 
     let watch_status: anime_api_data::WatchStatus;
     loop {
-        // Todo: When no input is given default to watching
-        let watch_status_input: u8 = get_input(Some(
-            "Set Watch Status: \n1. Watching\n2. Planning\n3. Completed\n4. Quit",
-        ))
-        .trim()
-        .parse()
-        .expect("Failed to parse input");
+        let mut input = get_input(Some(
+            "Set Watch Status: \n1. Watching\n2. Planning\n3. Completed\n4. Quit\n",
+        ));
 
+        if input.trim().is_empty() {
+            input = "1".to_string();
+        }
+
+        let watch_status_input: u8 = input.trim().parse().expect("Failed to parse input");
         match watch_status_input {
             1 => {
                 watch_status = anime_api_data::WatchStatus::Watching;
@@ -95,20 +99,26 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
     match watch_status {
         WatchStatus::Watching => {
             let choice = get_input(Some("Set anime as currently watching?(y/N)"));
+            println!("This is the choice taken: {}", choice);
 
-            match choice.to_lowercase().as_str() {
+            match choice.to_lowercase().trim() {
                 "y" => {
+                    println!("This is the choice taken: {}", choice);
                     is_current = true;
+                    println!("presesed yes");
                 }
                 _ => {
+                    println!("Flase: This is the choice taken: {}", choice);
                     is_current = false;
+                    println!("presesed no");
                 }
             }
         }
         _ => is_current = false,
     }
 
-    // todo : set anime english name to romaji if unknown
+    print!("Is current is {}", is_current);
+
     anime.resolve_unknown_name();
     _ = db::add_anime(conn, anime, watch_status, is_current);
 }
@@ -191,34 +201,53 @@ pub fn update_episode_count(
 ) {
     let anime = utils::return_anime_if_exists(conn, name.as_deref());
 
-    let already_completed;
+    let is_completed: bool = anime.watch_status == Some(WatchStatus::Watching)
+        || anime.episodes == anime.episode_progress.unwrap_or(0);
+
     match mut_type {
         EpisodeMutation::Set { number } => {
-            already_completed = true;
-            if number > &anime.episodes {
-                invalid_arg_error(InvalidArgError::InvalidEpisodeCount);
+            if number < &anime.episodes {
+                let _ = db::episode_mutation(conn, mut_type, name, Some(number.to_owned()));
             }
         }
+
         _ => {
-            if anime.episodes == anime.episode_progress.unwrap() {
-                println!("Anime was already completed adding it to completed");
-                already_completed = true;
-            } else {
-                already_completed = false;
+            if is_completed {
+                error_ctrl::invalid_arg_error(InvalidArgError::Completed);
             }
+
+            let _ = db::episode_mutation(conn, mut_type, name, number);
         }
-    };
-
-    if !already_completed {
-        let _ = db::episode_mutation(conn, mut_type, name, number);
     }
 
-    let anime = get_anime_from_option(conn, name);
-
-    if anime.episodes == anime.episode_progress.unwrap() {
-        println!("Anime Set to Completed");
-        set_completed(conn, name.as_deref(), None);
-    }
+    // let already_completed;
+    // match mut_type {
+    //     EpisodeMutation::Set { number } => {
+    //         already_completed = true;
+    //         if number > &anime.episodes {
+    //             invalid_arg_error(InvalidArgError::InvalidEpisodeCount);
+    //         }
+    //     }
+    //     _ => {
+    //         if anime.episodes == anime.episode_progress.unwrap() {
+    //             println!("Anime was already completed adding it to completed");
+    //             already_completed = true;
+    //         } else {
+    //             already_completed = false;
+    //         }
+    //     }
+    // };
+    //
+    // if !already_completed {
+    //     let _ = db::episode_mutation(conn, mut_type, name, number);
+    // }
+    //
+    // let anime = get_anime_from_option(conn, name);
+    //
+    // if anime.episodes == anime.episode_progress.unwrap() {
+    //     println!("Anime Set to Completed");
+    //     set_completed(conn, name.as_deref(), None);
+    // }
 }
 
 pub fn set_current(conn: &Connection, name: &str) {
@@ -346,4 +375,12 @@ pub fn set_completed(conn: &Connection, name: Option<&str>, date: Option<&str>) 
     if anime.is_current.unwrap() {
         let _ = db::remove_current(conn);
     }
+}
+
+pub fn delete(conn: &Connection, name: &str) {
+    let anime = utils::return_anime_if_exists(conn, Some(name));
+
+    let _ = db::delete_anime(conn, anime.title.native.as_str());
+
+    println!("{} removed from DB", anime.title.english);
 }

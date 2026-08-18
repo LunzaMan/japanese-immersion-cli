@@ -69,6 +69,9 @@ enum Commands {
         #[arg(long)]
         path: Option<path::PathBuf>,
     },
+    Delete {
+        name: String,
+    },
     Test,
 }
 
@@ -179,6 +182,10 @@ async fn main() {
 
         Commands::Export { path } => {
             utils::initialize_export_to_csv(&conn, path);
+        }
+
+        Commands::Delete { name } => {
+            operations::delete(&conn, name);
         }
 
         Commands::Test => {}

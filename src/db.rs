@@ -10,7 +10,7 @@ use crate::{
     },
     error_ctrl::{InvalidArgError, invalid_arg_error},
 };
-use std::path::PathBuf;
+use std::{fmt::format, path::PathBuf};
 
 pub fn connect(db_path: PathBuf) -> Connection {
     let conn = Connection::open(db_path).expect("Can't connect to db");
@@ -399,4 +399,15 @@ pub fn query_all(conn: &Connection) -> rusqlite::Result<Vec<Anime>> {
     let anime = anime_query(&mut sql, [])?;
 
     Ok(anime)
+}
+
+pub fn delete_anime(conn: &Connection, name: &str) -> rusqlite::Result<()> {
+    let sql = "DELETE FROM anime 
+            WHERE english_name = ?1 COLLATE NOCASE
+            OR romaji_name = ?1 COLLATE NOCASE
+            OR native_name = ?1 COLLATE NOCASE;
+        ";
+
+    conn.execute(sql, [name])?;
+    Ok(())
 }

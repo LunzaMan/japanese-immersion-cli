@@ -6,6 +6,7 @@ pub enum InvalidArgError {
     InvalidPath,
     InvalidChoice,
     InvalidAnime,
+    Completed,
 }
 
 pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
@@ -30,6 +31,9 @@ pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
         }
         InvalidArgError::InvalidAnime => {
             eprint!("Error: No such anime found")
+        }
+        InvalidArgError::Completed => {
+            eprint!("Error: Anime already Completed, set to watching to update")
         }
     };
 
