@@ -198,8 +198,10 @@ pub fn update_episode_count(
 
     match mut_type {
         EpisodeMutation::Set { number } => {
-            if number < &anime.episodes {
+            if number <= &anime.episodes {
                 let _ = db::episode_mutation(conn, mut_type, name, Some(number.to_owned()));
+            } else {
+                error_ctrl::invalid_arg_error(InvalidArgError::InvalidEpisodeCount);
             }
         }
 

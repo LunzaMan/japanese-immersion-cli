@@ -47,34 +47,40 @@ enum Commands {
         #[arg(long)]
         name: Option<String>,
     },
-
+    /// change episode count
     Episode {
         #[command(subcommand)]
         episode_mutation_type: EpisodeMutation,
         #[arg(long, global = true)]
         name: Option<String>,
     },
+    /// set an anime to current
     SetCurrent {
         name: String,
     },
+    /// set start or end date of an anime
     SetDate {
         date_type: DateType,
         date: String,
         name: String,
     },
+    /// set watch status of an anime
     SetStatus {
         watch_status: anime_api_data::WatchStatus,
         name: Option<String>,
     },
+    /// set anime as completed
     Complete {
         name: Option<String>,
         #[arg(long)]
         date: Option<String>,
     },
+    /// export db
     Export {
         #[arg(long)]
         path: Option<path::PathBuf>,
     },
+    /// remove anime from db
     Delete {
         name: String,
     },
