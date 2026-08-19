@@ -1,6 +1,7 @@
-use std::path;
+use std::{io, path};
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::{Shell, generate};
 use rusqlite::Connection;
 
 use crate::{
@@ -17,7 +18,7 @@ mod output;
 mod utils;
 
 #[derive(Parser)]
-#[command(version)]
+#[command(version, name = "ji-cli")]
 struct Args {
     #[arg(short, long, global = true)]
     verbose: bool,
@@ -73,6 +74,12 @@ enum Commands {
         name: String,
     },
     Test,
+
+    #[command(hide = true)]
+    GenerateCompletion {
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 #[derive(Subcommand)]
@@ -101,6 +108,12 @@ async fn main() {
     let args = Args::parse();
 
     match &args.command {
+        Commands::GenerateCompletion { shell } => {
+            let mut cmd = Args::command();
+            let bin_name = cmd.get_name().to_string();
+            generate(shell.to_owned(), &mut cmd, bin_name, &mut io::stdout());
+        }
+
         Commands::Add { name } => match name {
             Some(name) => {
                 operations::add(&conn, Some(name.to_owned())).await;
