@@ -1,7 +1,4 @@
-use std::{
-    io::{self, Write},
-    ops::Deref,
-};
+use std::io::{self, Write};
 
 use rusqlite::Connection;
 
@@ -99,18 +96,13 @@ pub async fn add(conn: &Connection, search_arg: Option<String>) {
     match watch_status {
         WatchStatus::Watching => {
             let choice = get_input(Some("Set anime as currently watching?(y/N)"));
-            println!("This is the choice taken: {}", choice);
 
             match choice.to_lowercase().trim() {
                 "y" => {
-                    println!("This is the choice taken: {}", choice);
                     is_current = true;
-                    println!("presesed yes");
                 }
                 _ => {
-                    println!("Flase: This is the choice taken: {}", choice);
                     is_current = false;
-                    println!("presesed no");
                 }
             }
         }

@@ -78,6 +78,6 @@ pub fn list_print(animes: Vec<anime_api_data::Anime>) {
         let ep = anime.episodes.to_string().bright_green();
         let slash = "/".to_string().bright_green();
 
-        println!("{}. {}  {}{}{}", id, name, current_ep, slash, ep);
+        println!("{}.\t{}\t{}{}{}", id, name, current_ep, slash, ep);
     }
 }

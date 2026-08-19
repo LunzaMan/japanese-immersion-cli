@@ -18,7 +18,7 @@ mod output;
 mod utils;
 
 #[derive(Parser)]
-#[command(version, name = "ji-cli")]
+#[command(version, about, name = "ji-cli")]
 struct Args {
     #[arg(short, long, global = true)]
     verbose: bool,
@@ -29,13 +29,17 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// search for anime in Anilist
     Add {
         name: Option<String>,
     },
+    /// List anime
     List {
         status: Option<anime_api_data::ListType>,
     },
+    /// get current anime
     Current,
+    /// add number of anki cards for the anime
     Cards {
         card_command: CardsCommand,
         number: u32,
@@ -43,6 +47,7 @@ enum Commands {
         #[arg(long)]
         name: Option<String>,
     },
+
     Episode {
         #[command(subcommand)]
         episode_mutation_type: EpisodeMutation,

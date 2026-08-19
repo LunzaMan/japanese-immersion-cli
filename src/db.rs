@@ -10,7 +10,7 @@ use crate::{
     },
     error_ctrl::{InvalidArgError, invalid_arg_error},
 };
-use std::{fmt::format, path::PathBuf};
+use std::path::PathBuf;
 
 pub fn connect(db_path: PathBuf) -> Connection {
     let conn = Connection::open(db_path).expect("Can't connect to db");
@@ -67,8 +67,6 @@ pub fn add_anime(
         )
         .expect("Couldn't remove is_current from previous anime");
     }
-
-    // todo: first check if anime already in list by using anilist id
 
     conn.execute(
             "INSERT INTO anime(id, english_name, romaji_name, native_name, date_added, total_episodes, is_current, anilist_url, watch_status, media_type) 

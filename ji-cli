@@ -1,0 +1,576 @@
+#compdef ji-cli
+
+autoload -U is-at-least
+
+_ji-cli() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_ji-cli_commands" \
+"*::: :->ji-cli" \
+&& ret=0
+    case $state in
+    (ji-cli)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ji-cli-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::status:(all watching planning completed)' \
+&& ret=0
+;;
+(current)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(cards)
+_arguments "${_arguments_options[@]}" : \
+'--name=[]:NAME:_default' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':card_command:(add total)' \
+':number:_default' \
+&& ret=0
+;;
+(episode)
+_arguments "${_arguments_options[@]}" : \
+'--name=[]:NAME:_default' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ji-cli__subcmd__episode_commands" \
+"*::: :->episode" \
+&& ret=0
+
+    case $state in
+    (episode)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ji-cli-episode-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+'--name=[]:NAME:_default' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(subtract)
+_arguments "${_arguments_options[@]}" : \
+'--name=[]:NAME:_default' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+'--name=[]:NAME:_default' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':number:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ji-cli__subcmd__episode__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ji-cli-episode-help-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(subtract)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(set-current)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':name:_default' \
+&& ret=0
+;;
+(set-date)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':date_type:(start end)' \
+':date:_default' \
+':name:_default' \
+&& ret=0
+;;
+(set-status)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':watch_status:(watching completed planning)' \
+'::name:_default' \
+&& ret=0
+;;
+(complete)
+_arguments "${_arguments_options[@]}" : \
+'--date=[]:DATE:_default' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name:_default' \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : \
+'--path=[]:PATH:_files' \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':name:_default' \
+&& ret=0
+;;
+(test)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(generate-completion)
+_arguments "${_arguments_options[@]}" : \
+'-v[]' \
+'--verbose[]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':shell:(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ji-cli__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ji-cli-help-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(current)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(cards)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(episode)
+_arguments "${_arguments_options[@]}" : \
+":: :_ji-cli__subcmd__help__subcmd__episode_commands" \
+"*::: :->episode" \
+&& ret=0
+
+    case $state in
+    (episode)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ji-cli-help-episode-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(subtract)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(set-current)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set-date)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set-status)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(complete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(delete)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(test)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(generate-completion)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_ji-cli_commands] )) ||
+_ji-cli_commands() {
+    local commands; commands=(
+'add:search for anime in Anilist' \
+'list:List anime' \
+'current:get current anime' \
+'cards:add number of anki cards for the anime' \
+'episode:' \
+'set-current:' \
+'set-date:' \
+'set-status:' \
+'complete:' \
+'export:' \
+'delete:' \
+'test:' \
+'generate-completion:' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ji-cli commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__add_commands] )) ||
+_ji-cli__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli add commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__cards_commands] )) ||
+_ji-cli__subcmd__cards_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli cards commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__complete_commands] )) ||
+_ji-cli__subcmd__complete_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli complete commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__current_commands] )) ||
+_ji-cli__subcmd__current_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli current commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__delete_commands] )) ||
+_ji-cli__subcmd__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli delete commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode_commands] )) ||
+_ji-cli__subcmd__episode_commands() {
+    local commands; commands=(
+'add:' \
+'subtract:' \
+'set:' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ji-cli episode commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__add_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode add commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__help_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__help_commands() {
+    local commands; commands=(
+'add:' \
+'subtract:' \
+'set:' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ji-cli episode help commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__help__subcmd__add_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__help__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode help add commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__help__subcmd__help_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode help help commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__help__subcmd__set_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__help__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode help set commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__help__subcmd__subtract_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__help__subcmd__subtract_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode help subtract commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__set_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode set commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__episode__subcmd__subtract_commands] )) ||
+_ji-cli__subcmd__episode__subcmd__subtract_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli episode subtract commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__export_commands] )) ||
+_ji-cli__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli export commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__generate-completion_commands] )) ||
+_ji-cli__subcmd__generate-completion_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli generate-completion commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help_commands] )) ||
+_ji-cli__subcmd__help_commands() {
+    local commands; commands=(
+'add:search for anime in Anilist' \
+'list:List anime' \
+'current:get current anime' \
+'cards:add number of anki cards for the anime' \
+'episode:' \
+'set-current:' \
+'set-date:' \
+'set-status:' \
+'complete:' \
+'export:' \
+'delete:' \
+'test:' \
+'generate-completion:' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ji-cli help commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__add_commands] )) ||
+_ji-cli__subcmd__help__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help add commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__cards_commands] )) ||
+_ji-cli__subcmd__help__subcmd__cards_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help cards commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__complete_commands] )) ||
+_ji-cli__subcmd__help__subcmd__complete_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help complete commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__current_commands] )) ||
+_ji-cli__subcmd__help__subcmd__current_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help current commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__delete_commands] )) ||
+_ji-cli__subcmd__help__subcmd__delete_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help delete commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__episode_commands] )) ||
+_ji-cli__subcmd__help__subcmd__episode_commands() {
+    local commands; commands=(
+'add:' \
+'subtract:' \
+'set:' \
+    )
+    _describe -t commands 'ji-cli help episode commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__episode__subcmd__add_commands] )) ||
+_ji-cli__subcmd__help__subcmd__episode__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help episode add commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__episode__subcmd__set_commands] )) ||
+_ji-cli__subcmd__help__subcmd__episode__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help episode set commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__episode__subcmd__subtract_commands] )) ||
+_ji-cli__subcmd__help__subcmd__episode__subcmd__subtract_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help episode subtract commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__export_commands] )) ||
+_ji-cli__subcmd__help__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help export commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__generate-completion_commands] )) ||
+_ji-cli__subcmd__help__subcmd__generate-completion_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help generate-completion commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__help_commands] )) ||
+_ji-cli__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help help commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__list_commands] )) ||
+_ji-cli__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help list commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__set-current_commands] )) ||
+_ji-cli__subcmd__help__subcmd__set-current_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help set-current commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__set-date_commands] )) ||
+_ji-cli__subcmd__help__subcmd__set-date_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help set-date commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__set-status_commands] )) ||
+_ji-cli__subcmd__help__subcmd__set-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help set-status commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__help__subcmd__test_commands] )) ||
+_ji-cli__subcmd__help__subcmd__test_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli help test commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__list_commands] )) ||
+_ji-cli__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli list commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__set-current_commands] )) ||
+_ji-cli__subcmd__set-current_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli set-current commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__set-date_commands] )) ||
+_ji-cli__subcmd__set-date_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli set-date commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__set-status_commands] )) ||
+_ji-cli__subcmd__set-status_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli set-status commands' commands "$@"
+}
+(( $+functions[_ji-cli__subcmd__test_commands] )) ||
+_ji-cli__subcmd__test_commands() {
+    local commands; commands=()
+    _describe -t commands 'ji-cli test commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_ji-cli" ]; then
+    _ji-cli "$@"
+else
+    compdef _ji-cli ji-cli
+fi

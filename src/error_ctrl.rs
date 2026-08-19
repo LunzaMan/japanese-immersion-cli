@@ -2,7 +2,6 @@ pub enum InvalidArgError {
     Current,
     InvalidName,
     Date,
-    InvalidEpisodeCount,
     InvalidPath,
     InvalidChoice,
     InvalidAnime,
@@ -19,9 +18,6 @@ pub fn invalid_arg_error(err_type: InvalidArgError) -> ! {
         }
         InvalidArgError::Date => {
             eprint!("Invalid Date Error: Use format YYYY-MM-DD")
-        }
-        InvalidArgError::InvalidEpisodeCount => {
-            eprint!("Error: Invalid episode count")
         }
         InvalidArgError::InvalidPath => {
             eprint!("Error: Path doesn't exist")
